@@ -6,8 +6,9 @@ import {
 import { INK_CYCLE_MS, ballInkAt, demoBallPos, demoWrongHit, dotsFilledAt, periodIndex } from '../src/art/styleTileMotion';
 import { SHADOW_STEPS } from '../src/art/ball';
 import { allRisoKeys } from '../src/art/textures';
-import { STAMP_IDS, STAMP_INK, STAMP_INKS_ALLOWED, splatNeedsKeyline } from '../src/art/ui';
-import { INK_HEX } from '../src/art/palette';
+import { STAMP_IDS, STAMP_INK, STAMP_INKS_ALLOWED, STAMP_INK_FALLBACK, stampTint } from '../src/art/ui';
+import { splatNeedsKeyline } from '../src/art/splat';
+import { INK_HEX, PLAYER_INK } from '../src/art/palette';
 import { TUNING as T } from '../src/config/tuning';
 import { STAGE_QUIET_Y } from '../src/art/stage';
 
@@ -124,5 +125,21 @@ describe('stamp inks', () => {
     expect(splatNeedsKeyline(INK_HEX.yellow)).toBe(true);
     expect(splatNeedsKeyline(INK_HEX.pink)).toBe(false);
     expect(splatNeedsKeyline(INK_HEX.blue)).toBe(false);
+    expect(splatNeedsKeyline('yellow')).toBe(true);
+    expect(splatNeedsKeyline('pink')).toBe(false);
+    expect(splatNeedsKeyline('black')).toBe(false);
+  });
+  it('stampTint never returns yellow: allowed inks pass, yellow falls back to black', () => {
+    expect(STAMP_INK_FALLBACK).toBe(INK_HEX.black);
+    expect(stampTint('yellow')).toBe(INK_HEX.black);
+    expect(stampTint(INK_HEX.yellow)).toBe(INK_HEX.black);
+    expect(stampTint(0x123456)).toBe(INK_HEX.black);
+    for (const ink of ['pink', 'blue', 'black'] as const) {
+      expect(stampTint(ink)).toBe(INK_HEX[ink]);
+      expect(stampTint(INK_HEX[ink])).toBe(INK_HEX[ink]);
+    }
+    // the natural lobby call: player ink for P3 is yellow
+    expect(stampTint(PLAYER_INK[2])).not.toBe(INK_HEX.yellow);
+    for (const id of STAMP_IDS) expect(stampTint(STAMP_INK[id])).toBe(STAMP_INK[id]);
   });
 });

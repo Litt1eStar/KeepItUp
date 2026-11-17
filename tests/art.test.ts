@@ -4,7 +4,8 @@ import {
   charMisreg, charOutlineExtent, eyeOutline, pupilPos, pupilScale,
 } from '../src/art/characters';
 import { SHADOW_STEPS, ballArt, ballLineExtent, ballMisreg, ballSpinTicks, shadowDensity, shadowStep, shadowTexSize } from '../src/art/ball';
-import { SPLAT_SIZE, STAMP_IDS, STAMP_TEXT, formatRank, formatScore, splatLineExtent, splatMaxExtent, splatShapes } from '../src/art/ui';
+import { STAMP_IDS, STAMP_TEXT, formatRank, formatScore } from '../src/art/ui';
+import { SPLAT_SIZE, splatLineExtent, splatMaxExtent, splatShapes } from '../src/art/splat';
 import { PLAY_FIELD, STAGE_QUIET_Y, stageInkCoverage, sunTopY } from '../src/art/stage';
 import { polygonClearance, shapePoints, type Pt } from '../src/art/draw';
 import { jitterDots, halftoneDots } from '../src/art/riso';
@@ -177,10 +178,23 @@ describe('ui + stage', () => {
     // not a blank page: the poster shapes are still there
     expect(cov.yellow + cov.pink + cov.blue).toBeGreaterThan(0.005);
   });
-  it('no ball-sized patch of the play field is busy (≤ 12% per ink in any 120 px window)', () => {
-    for (let y = PLAY_FIELD.y; y + 120 <= PLAY_FIELD.y + PLAY_FIELD.h; y += 20) {
-      for (let x = 0; x + 120 <= PLAY_FIELD.w; x += 40) {
-        const cov = stageInkCoverage({ x, y, w: 120, h: 120 });
+  it('no ball-sized patch is busy: ≤ 12% per ink in every 120 px window of the play field', () => {
+    // limit is per 120×120 window; scan a 20/40 px grid plus the end-aligned row/column (the sun and
+    // disc peak against the floor, i.e. in the bottom-aligned row)
+    const steps = (from: number, to: number, step: number): number[] => {
+      const out: number[] = [];
+      for (let v = from; v <= to; v += step) out.push(v);
+      if (out[out.length - 1] !== to) out.push(to);
+      return out;
+    };
+    const W = 120;
+    const ys = steps(PLAY_FIELD.y, PLAY_FIELD.y + PLAY_FIELD.h - W, 20);
+    const xs = steps(PLAY_FIELD.x, PLAY_FIELD.x + PLAY_FIELD.w - W, 40);
+    expect(ys[ys.length - 1]).toBe(TUNING.floorY - W);
+    expect(xs[xs.length - 1]).toBe(TUNING.width - W);
+    for (const y of ys) {
+      for (const x of xs) {
+        const cov = stageInkCoverage({ x, y, w: W, h: W });
         for (const v of Object.values(cov)) expect(v).toBeLessThanOrEqual(0.12);
       }
     }

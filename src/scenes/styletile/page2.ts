@@ -4,7 +4,8 @@ import { PLAYERS } from '../../config/players';
 import { INK, INK_HEX, PLAYER_INK } from '../../art/palette';
 import { risoText } from '../../art/type';
 import { RISO_KEYS } from '../../art/textures';
-import { STAMP_IDS, STAMP_INK, TICKET, splatNeedsKeyline } from '../../art/ui';
+import { STAMP_IDS, STAMP_INK, TICKET, stampTint } from '../../art/ui';
+import { splatNeedsKeyline } from '../../art/splat';
 import { boilVariant } from '../../art/motion';
 import { SLAM_PERIOD_MS, dotsFilledAt, periodIndex } from '../../art/styleTileMotion';
 import { StampSlam } from '../../art/views/StampSlam';
@@ -31,7 +32,7 @@ export function buildPage2(scene: Phaser.Scene): TilePage {
   caption(scene, root, 16, 84, 'TICKETS + JOINED STAMP (RE-SLAMS EVERY 3 S)');
   const tx = (i: number) => 16 + i * (TICKET.w * TICKET_SCALE + 10);
   PLAYERS.forEach((p) => add(scene.add.image(tx(p.id), 102, RISO_KEYS.ticket(p.id)).setOrigin(0).setScale(S * TICKET_SCALE)));
-  const joined = new StampSlam(scene, 'JOINED', INK_HEX[PLAYER_INK[1]], -0.2, 0.7);
+  const joined = new StampSlam(scene, 'JOINED', stampTint(PLAYER_INK[1]), -0.2, 0.7);
   // over the illustration/name area (ticket-local ~(110, 50)), clear of the controls line at y 99
   joined.image.setPosition(tx(1) + 110 * TICKET_SCALE, 102 + 50 * TICKET_SCALE);
   root.add(joined.image);
@@ -63,7 +64,7 @@ export function buildPage2(scene: Phaser.Scene): TilePage {
     const cx = x + w / 2;
     add(
       scene.add.image(cx, 280, RISO_KEYS.stamp(it.id)).setScale(S * sc)
-        .setTint(STAMP_INK[it.id]).setBlendMode(MULTIPLY).setRotation(((i * 37) % 11 - 5) * 0.012),
+        .setTint(stampTint(STAMP_INK[it.id])).setBlendMode(MULTIPLY).setRotation(((i * 37) % 11 - 5) * 0.012),
     );
     x += w + gap * sc;
   });

@@ -1,11 +1,10 @@
 /**
- * Riso UI pieces: rubber stamps and ink splats (drawn in WHITE so the runtime tints them with
- * setTint(INK_HEX.x)), black splat keylines (layered on yellow splats), player ticket stubs, the high-score receipt
- * and the next-ball dots.
+ * Riso UI pieces: rubber stamps (drawn in WHITE so the runtime tints them with setTint(stampTint(ink))),
+ * player ticket stubs, the high-score receipt and the next-ball dots. Splats live in splat.ts.
  * No Phaser import; all sizes logical.
  */
 import { PLAYERS, type PlayerId } from '../config/players';
-import { INK, INK_ANGLE, INK_HEX, PLAYER_INK } from './palette';
+import { INK, INK_ANGLE, INK_HEX, PLAYER_INK, type InkName } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, paperGrain, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { DISPLAY_FONT, MONO_FONT } from './type';
 import { densify, font, handLine, inkLayer, knockOut, roundRectPath, strokeWobbly, traceShape, type Pt } from './draw';
@@ -70,91 +69,6 @@ export function drawStamp(ctx: Ctx, id: StampId, w: number, h: number): void {
   ctx.restore();
   mottle(ctx, w, h, seed + 1, 0.45);
   speckle(ctx, w, h, '#fff', seed + 2, 9);
-}
-
-// ---------------------------------------------------------------- splats
-
-export const SPLAT_SIZE = 64;
-const SPLAT_R = 13;
-const SPIKE_MAX = 1.7; // × SPLAT_R
-const DROP_DIST_MAX = 2.0; // × SPLAT_R
-const DROP_R_MAX = 4.2;
-
-/** Max distance from the splat center that ink can reach (pure; ≤ SPLAT_SIZE/2 so nothing clips). */
-export function splatMaxExtent(): number {
-  return Math.max(SPLAT_R * SPIKE_MAX, SPLAT_R * DROP_DIST_MAX + DROP_R_MAX * 1.15);
-}
-
-/** Keyline width of `riso:splatLine:{v}`. */
-export const SPLAT_LINE_W = 1.2;
-
-/** Splat outlines for variant v (pure, deterministic): the lumpy main blot, then each droplet. */
-export function splatShapes(v: number): Pt[][] {
-  const rnd = seeded(500 + v * 11);
-  const c = SPLAT_SIZE / 2, R = SPLAT_R;
-  const pts: Pt[] = [];
-  const spikes = new Set([Math.floor(rnd() * 22), Math.floor(rnd() * 22), Math.floor(rnd() * 22)]);
-  for (let i = 0; i < 22; i++) {
-    const a = (i / 22) * Math.PI * 2;
-    const rr = R * (spikes.has(i) ? SPIKE_MAX - 0.25 + rnd() * 0.25 : 0.82 + rnd() * 0.3);
-    pts.push([c + Math.cos(a) * rr, c + Math.sin(a) * rr]);
-  }
-  const shapes = [pts];
-  const drops = 2 + Math.floor(rnd() * 2);
-  for (let i = 0; i < drops; i++) {
-    const a = rnd() * Math.PI * 2, d = R * (DROP_DIST_MAX - 0.35 + rnd() * 0.35), r = 1.8 + rnd() * (DROP_R_MAX - 1.8);
-    shapes.push(wobblePoints(circlePoints(c + Math.cos(a) * d, c + Math.sin(a) * d, r, 10), v * 7 + i, r * 0.15));
-  }
-  return shapes;
-}
-
-/** Max distance from the splat center reached by the keyline stroke (pure; ≤ SPLAT_SIZE/2). */
-export function splatLineExtent(): number {
-  return splatMaxExtent() + SPLAT_LINE_W / 2;
-}
-
-/**
- * Whether the runtime should layer `riso:splatLine:{v}` on a splat of this tint. Only yellow:
- * pale yellow on paper needs a black keyline to read; pink/blue splats stay flat (a keyline
- * would make them heavy and cartoony).
- */
-export function splatNeedsKeyline(tint: number): boolean {
-  return tint === INK_HEX.yellow;
-}
-
-/** Ink splat in white: lumpy main blot + a few droplets, variant v. */
-export function drawSplat(ctx: Ctx, v: number): void {
-  ctx.save();
-  ctx.fillStyle = '#fff';
-  for (const s of splatShapes(v)) {
-    tracePath(ctx, s);
-    ctx.fill();
-  }
-  ctx.restore();
-  mottle(ctx, SPLAT_SIZE, SPLAT_SIZE, 520 + v, 0.3);
-  // stray specks, kept off the texture edge
-  ctx.save();
-  ctx.translate(4, 4);
-  speckle(ctx, SPLAT_SIZE - 8, SPLAT_SIZE - 8, '#fff', 530 + v, 6);
-  ctx.restore();
-}
-
-/**
- * Black keyline for splat variant v (same SPLAT_SIZE texture, same outlines as drawSplat, NOT tinted).
- * Layer it on top of the tinted splat (MULTIPLY) when splatNeedsKeyline(tint), with the same variant.
- */
-export function drawSplatLine(ctx: Ctx, v: number): void {
-  ctx.save();
-  ctx.strokeStyle = INK.black;
-  ctx.lineWidth = SPLAT_LINE_W;
-  ctx.lineJoin = 'round';
-  for (const s of splatShapes(v)) {
-    tracePath(ctx, s);
-    ctx.stroke();
-  }
-  ctx.restore();
-  // broken like a worn print, so it stays a keyline rather than a cartoon outline
-  mottle(ctx, SPLAT_SIZE, SPLAT_SIZE, 540 + v, 0.35);
 }
 
 // ---------------------------------------------------------------- ticket
@@ -380,3 +294,15 @@ export const STAMP_INK: Record<StampId, number> = {
   NICE: INK_HEX.blue, PASS: INK_HEX.pink, WRONG: INK_HEX.pink, PLUS_BALL: INK_HEX.blue,
   COMBO: INK_HEX.pink, DROPPED: INK_HEX.black, JOINED: INK_HEX.blue,
 };
+
+/** Replacement for a disallowed stamp ink (yellow, or any non-ink tint): black, the most legible on paper. */
+export const STAMP_INK_FALLBACK = INK_HEX.black;
+
+/**
+ * Runtime tint for a text stamp printed in `ink` (InkName or INK_HEX value). Pink/blue/black pass
+ * through; yellow (e.g. P3's player ink) or anything else becomes STAMP_INK_FALLBACK.
+ */
+export function stampTint(ink: InkName | number): number {
+  const hex = typeof ink === 'number' ? ink : INK_HEX[ink];
+  return STAMP_INKS_ALLOWED.includes(hex) ? hex : STAMP_INK_FALLBACK;
+}

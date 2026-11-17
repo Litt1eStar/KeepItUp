@@ -77,7 +77,7 @@ const poly2segs = (pts: Pt[], close = true): Seg[] =>
     return [x, y, x2, y2];
   });
 
-/** Keep only the parts of segments above y = maxY (drop segments entirely below). */
+/** Drop segments entirely at or below y = maxY (segments crossing it are kept whole; the floor hides the rest). */
 const above = (segs: Seg[], maxY: number): Seg[] => segs.filter(([, y1, , y2]) => Math.min(y1, y2) < maxY);
 
 function zigzag(cy: number, amp: number, half: number, step: number): Pt[] {
@@ -167,9 +167,10 @@ function areaPerLength(s: StrokeSet): number {
 }
 
 /**
- * Approximate ink coverage (0..1) per ink of the decorative layers inside `rect` (default the play
- * field): halftone dot areas whose centers fall in the rect + stroke area sampled per 1 px of length.
- * Computed from the same DOT_FILLS / STROKES used to draw (mottle ignored, so it is an upper bound).
+ * Ink coverage (0..1) per ink of the decorative layers inside `rect` (default the play field):
+ * halftone dot areas whose centers fall in the rect + stroke area sampled per 1 px of length.
+ * Computed from the same DOT_FILLS / STROKES used to draw. Approximate (mottle and draw-time
+ * jitter ignored).
  */
 export function stageInkCoverage(
   rect: { x: number; y: number; w: number; h: number } = PLAY_FIELD,

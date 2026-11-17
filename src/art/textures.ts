@@ -3,8 +3,7 @@
  * (display images with .setScale(S)). All keys are prefixed `riso:`; use RISO_KEYS, not strings.
  *
  * Origins: characters (fill/line) (0.5, 1) — see CHAR_TEX; pupil, balls, shadows, stamps, splats,
- * splat keylines,
- * dots (0.5, 0.5); speedlines (1, 0.5) at the character's back; bg/ticket/receipt (0, 0).
+ * splat keylines, dots (0.5, 0.5); speedlines (1, 0.5) at the character's back; bg/ticket/receipt (0, 0).
  */
 import type Phaser from 'phaser';
 import { PLAYERS, type PlayerId } from '../config/players';
@@ -14,7 +13,8 @@ import { INK, INK_ANGLE } from './palette';
 import { CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
 import { SHADOW_STEPS, ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
 import { drawStage } from './stage';
-import { DOT_TEX, RECEIPT, SPLAT_SIZE, STAMP_IDS, TICKET, drawDot, drawReceipt, drawSplat, drawSplatLine, drawStamp, drawTicket, stampSize, type StampId } from './ui';
+import { DOT_TEX, RECEIPT, STAMP_IDS, TICKET, drawDot, drawReceipt, drawStamp, drawTicket, stampSize, type StampId } from './ui';
+import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
 
 type Ctx = CanvasRenderingContext2D;
 
