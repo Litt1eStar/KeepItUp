@@ -4,15 +4,13 @@ import { PLAYERS } from '../../config/players';
 import { INK, INK_HEX, PLAYER_INK } from '../../art/palette';
 import { risoText } from '../../art/type';
 import { RISO_KEYS } from '../../art/textures';
-import { STAMP_IDS, TICKET, type StampId } from '../../art/ui';
-import { SLAM_PERIOD_MS, boilVariant, dotsFilledAt, slamScale } from '../../art/styleTileMotion';
+import { STAMP_IDS, STAMP_INK, TICKET } from '../../art/ui';
+import { boilVariant } from '../../art/motion';
+import { SLAM_PERIOD_MS, dotsFilledAt, periodIndex } from '../../art/styleTileMotion';
+import { StampSlam } from '../../art/views/StampSlam';
 import { MULTIPLY, caption, type TilePage } from './shared';
 
 const TICKET_SCALE = 0.8;
-const STAMP_INK: Record<StampId, number> = {
-  NICE: INK_HEX.blue, PASS: INK_HEX.pink, WRONG: INK_HEX.pink, PLUS_BALL: INK_HEX.yellow,
-  COMBO: INK_HEX.pink, DROPPED: INK_HEX.black, JOINED: INK_HEX.blue,
-};
 
 export function buildPage2(scene: Phaser.Scene): TilePage {
   const root = scene.add.container(0, 0);
@@ -33,10 +31,9 @@ export function buildPage2(scene: Phaser.Scene): TilePage {
   caption(scene, root, 16, 84, 'TICKETS + JOINED STAMP (RE-SLAMS EVERY 3 S)');
   const tx = (i: number) => 16 + i * (TICKET.w * TICKET_SCALE + 10);
   PLAYERS.forEach((p) => add(scene.add.image(tx(p.id), 102, RISO_KEYS.ticket(p.id)).setOrigin(0).setScale(S * TICKET_SCALE)));
-  const joined = add(
-    scene.add.image(tx(1) + 98, 102 + 76, RISO_KEYS.stamp('JOINED'))
-      .setTint(INK_HEX[PLAYER_INK[1]]).setBlendMode(MULTIPLY).setRotation(-0.2),
-  );
+  const joined = new StampSlam(scene, 'JOINED', INK_HEX[PLAYER_INK[1]], -0.2, 0.7);
+  joined.image.setPosition(tx(1) + 98, 102 + 76);
+  root.add(joined.image);
 
   // ---- splats
   caption(scene, root, 540, 84, 'SPLATS');
@@ -75,16 +72,25 @@ export function buildPage2(scene: Phaser.Scene): TilePage {
   add(scene.add.text(16, 424, 'Space Mono regular — 0123456789 01:24 ×2.3', risoText(12, INK.black, 'mono')));
 
   let lastDots = -1;
+  let lastBoil = -1;
+  let lastSlam = -1;
   const update = (t: number): void => {
     const n = dotsFilledAt(t);
     if (n !== lastDots) {
       lastDots = n;
       dots.forEach((d, i) => d.setTexture(i < n ? RISO_KEYS.dot : RISO_KEYS.dotEmpty));
     }
-    const since = t % SLAM_PERIOD_MS;
-    joined.setScale(S * 0.7 * slamScale(since));
+    const slam = periodIndex(t, SLAM_PERIOD_MS);
+    if (slam !== lastSlam) {
+      lastSlam = slam;
+      joined.trigger(t);
+    }
+    joined.tick(t);
     const v = boilVariant(t);
-    splats.forEach((s, i) => s.setTexture(RISO_KEYS.splat((i + v) % 3)));
+    if (v !== lastBoil) {
+      lastBoil = v;
+      splats.forEach((s, i) => s.setTexture(RISO_KEYS.splat((i + v) % 3)));
+    }
   };
   return { root, update };
 }

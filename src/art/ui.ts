@@ -4,7 +4,7 @@
  * No Phaser import; all sizes logical.
  */
 import { PLAYERS, type PlayerId } from '../config/players';
-import { INK, INK_ANGLE, PLAYER_INK } from './palette';
+import { INK, INK_ANGLE, INK_HEX, PLAYER_INK } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, paperGrain, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { DISPLAY_FONT, MONO_FONT } from './type';
 import { densify, font, handLine, inkLayer, knockOut, roundRectPath, strokeWobbly, traceShape, type Pt } from './draw';
@@ -326,3 +326,11 @@ export function drawDot(ctx: Ctx, filled: boolean, seed = 0): void {
   else ctx.stroke();
   ctx.restore();
 }
+
+// ---------------------------------------------------------------- stamp inks
+
+/** Default ink (INK_HEX tint) for each stamp when used at runtime. Yellow is faint on paper: back it with a darker ink. */
+export const STAMP_INK: Record<StampId, number> = {
+  NICE: INK_HEX.blue, PASS: INK_HEX.pink, WRONG: INK_HEX.pink, PLUS_BALL: INK_HEX.yellow,
+  COMBO: INK_HEX.pink, DROPPED: INK_HEX.black, JOINED: INK_HEX.blue,
+};

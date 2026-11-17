@@ -85,6 +85,9 @@ export const TUNING = {
   // Derived, so it stays correct if the character size changes.
   dangerLineY: FLOOR_Y - PLAYER_SIZE + 20,
 
+  // Floor-shadow fade range: a ball whose bottom is this far above the floor (or more) gets the faintest shadow.
+  shadowMaxHeight: 300,
+
   // Juice (new)
   hitStopMs: 40,
   shakeWrongMs: 120,

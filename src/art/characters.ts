@@ -84,13 +84,17 @@ export function pupilScale(id: PlayerId): number {
  * body center at (0, -CHAR_R)), looking along world direction (lookX, lookY). Eye positions are
  * mirrored for facing = -1; travel is clamped to the eye's ellipse (zero look → rest position).
  */
-export function pupilPos(id: PlayerId, eyeIndex: number, lookX: number, lookY: number, facing: 1 | -1): { x: number; y: number } {
+export function pupilPos(
+  id: PlayerId, eyeIndex: number, lookX: number, lookY: number, facing: 1 | -1, out: { x: number; y: number } = { x: 0, y: 0 },
+): { x: number; y: number } {
   const L = EYE_LAYOUT[id];
   const e = L.eyes[eyeIndex];
   const len = Math.hypot(lookX, lookY);
   const ox = len > 1e-6 ? (lookX / len) * L.maxPupilOffset : 0;
   const oy = len > 1e-6 ? (lookY / len) * L.maxPupilOffsetY : 0;
-  return { x: facing * e.x + ox, y: -CHAR_R + e.y + oy };
+  out.x = facing * e.x + ox;
+  out.y = -CHAR_R + e.y + oy;
+  return out;
 }
 
 /** Speed lines texture: streaks trail to the left; place with origin (1, 0.5) at the character's back. */
