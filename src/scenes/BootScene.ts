@@ -37,7 +37,7 @@ export class BootScene extends Phaser.Scene {
 
     generateRisoTextures(this);
 
-    this.scene.start('Lobby');
+    this.scene.start(new URLSearchParams(location.search).has('styletile') ? 'StyleTile' : 'Lobby');
   }
 
   /** Create a canvas texture of logical size w×h, drawn at RS× resolution. */

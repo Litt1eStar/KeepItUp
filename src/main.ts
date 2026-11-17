@@ -9,6 +9,7 @@ import { BootScene } from './scenes/BootScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { GameScene } from './scenes/GameScene';
 import { GameOverScene } from './scenes/GameOverScene';
+import { StyleTileScene } from './scenes/StyleTileScene';
 
 async function start(): Promise<void> {
   // Make sure the font is ready before any text is rasterized, otherwise the first
@@ -36,7 +37,7 @@ async function start(): Promise<void> {
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     input: { gamepad: true },
-    scene: [BootScene, LobbyScene, GameScene, GameOverScene],
+    scene: [BootScene, LobbyScene, GameScene, GameOverScene, StyleTileScene],
   });
 
   // Handy for debugging/playtesting from the browser console.
