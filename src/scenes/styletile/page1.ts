@@ -5,7 +5,7 @@ import { PLAYERS, type PlayerId } from '../../config/players';
 import { CHAR_R } from '../../art/characters';
 import { SHADOW_STEPS } from '../../art/ball';
 import { RISO_KEYS } from '../../art/textures';
-import { MOTION_STEP_MS, boilVariant, facingToward, idlePose, joltOffset, quantizeTime, type IdlePose } from '../../art/motion';
+import { MOTION_STEP_MS, facingToward, idlePose, joltOffset, quantizeTime, type IdlePose } from '../../art/motion';
 import { ballInkAt, demoBallPos, demoWrongHit } from '../../art/styleTileMotion';
 import { RisoCharacterView, type CharPose } from '../../art/views/RisoCharacterView';
 import { RisoBallView } from '../../art/views/RisoBallView';
@@ -30,10 +30,9 @@ export function buildPage1(scene: Phaser.Scene): TilePage {
     return view;
   });
 
-  // dash character: speed lines are a child of its container, so they follow its squash/tilt
-  const dash = new RisoCharacterView(scene, 1);
-  const speed = scene.add.image(-CHAR_R * 1.1, -CHAR_R, RISO_KEYS.speedlines).setOrigin(1, 0.5).setScale(S * 1.1).setBlendMode(MULTIPLY);
-  dash.container.addAt(speed, 0);
+  // dash character: its speed lines follow its squash/tilt
+  const dash = new RisoCharacterView(scene, 1, 250);
+  dash.setSpeedlines(true);
   dash.container.setRotation(0.12).setScale(1.2, 0.85);
   root.add(dash.container);
 
@@ -90,8 +89,7 @@ export function buildPage1(scene: Phaser.Scene): TilePage {
     const cyc = (quantizeTime(t, MOTION_STEP_MS) % DASH_CYCLE_MS) / DASH_CYCLE_MS;
     dash.container.setPosition(DASH_X0 + cyc * DASH_SPAN, T.floorY - 4);
     dash.pose(dashPose);
-    dash.tick(t + 250);
-    speed.setFlipY(boilVariant(t) === 1);
+    dash.tick(t);
 
     const ink = ballInkAt(t);
     if (ink !== lastInk) {
@@ -99,7 +97,7 @@ export function buildPage1(scene: Phaser.Scene): TilePage {
       mover.setInk(ink, t);
     }
     mover.container.setPosition(ball.x, ball.y);
-    mover.updateShadow(ball.y + r);
+    mover.updateShadow(ball.x, ball.y + r);
     for (const b of balls) b.tick(t);
   };
 

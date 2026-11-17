@@ -11,7 +11,12 @@ export class StampSlam {
   private scale = NaN;
 
   constructor(scene: Phaser.Scene, id: StampId, tint: number, rotation: number, private readonly baseScale = 1) {
-    this.image = scene.add.image(0, 0, RISO_KEYS.stamp(id)).setTint(tint).setRotation(rotation).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    this.image = scene.add.image(0, 0, RISO_KEYS.stamp(id)).setTint(tint).setRotation(rotation).setBlendMode(Phaser.BlendModes.MULTIPLY)
+      .setScale(S * baseScale);
+  }
+
+  destroy(): void {
+    this.image.destroy();
   }
 
   trigger(tMs: number): void {

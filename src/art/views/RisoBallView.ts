@@ -63,8 +63,8 @@ export class RisoBallView {
     }
   }
 
-  /** Position the shadow under the ball and pick normal/danger + density for its bottom edge. */
-  updateShadow(ballBottomY: number): void {
+  /** Place the shadow under x and pick normal/danger + density from the ball's bottom edge. */
+  updateShadow(x: number, ballBottomY: number): void {
     const sh = this.shadow;
     if (!sh) return;
     const choice = shadowChoice(ballBottomY);
@@ -72,6 +72,11 @@ export class RisoBallView {
       this.shadowKey = choice.key;
       sh.setTexture(choice.key);
     }
-    sh.setPosition(this.container.x, this.shadowY);
+    sh.setPosition(x, this.shadowY);
+  }
+
+  destroy(): void {
+    this.shadow?.destroy();
+    this.container.destroy();
   }
 }

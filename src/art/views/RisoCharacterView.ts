@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { S } from '../../config/render';
 import type { PlayerId } from '../../config/players';
-import { charMisreg, pupilPos, pupilScale } from '../characters';
+import { CHAR_R, charMisreg, pupilPos, pupilScale } from '../characters';
 import { boilVariant } from '../motion';
 import { RISO_KEYS } from '../textures';
 
@@ -31,14 +31,31 @@ export class RisoCharacterView {
   private readonly pupils: Phaser.GameObjects.Image[];
   private readonly misreg: { dx: number; dy: number };
   private readonly tmp = { x: 0, y: 0 };
+  private speedlines: Phaser.GameObjects.Image | null = null;
   private variant = 0;
 
-  constructor(scene: Phaser.Scene, readonly id: PlayerId) {
+  /** boilPhaseMs offsets this character's linework boil so several characters don't swap in sync. */
+  constructor(private readonly scene: Phaser.Scene, readonly id: PlayerId, private readonly boilPhaseMs = 0) {
     this.misreg = charMisreg(id);
     this.fill = scene.add.image(0, 0, RISO_KEYS.charFill(id)).setOrigin(0.5, 1).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.line = scene.add.image(0, 0, RISO_KEYS.charLine(id, 0)).setOrigin(0.5, 1).setScale(S);
     this.pupils = [0, 1].map(() => scene.add.image(0, 0, RISO_KEYS.pupil).setScale(pupilScale(id) * S));
     this.container = scene.add.container(0, 0, [this.fill, this.line, ...this.pupils]);
+    this.pose({ face: 1, lookX: 0, lookY: 0 });
+  }
+
+  /** Show/hide MULTIPLY speed lines trailing behind the character's back (they follow its squash/tilt). */
+  setSpeedlines(on: boolean): void {
+    if (on && !this.speedlines) {
+      this.speedlines = this.scene.add.image(-CHAR_R * 1.1, -CHAR_R, RISO_KEYS.speedlines)
+        .setOrigin(1, 0.5).setScale(S * 1.1).setBlendMode(Phaser.BlendModes.MULTIPLY);
+      this.container.addAt(this.speedlines, 0);
+    }
+    this.speedlines?.setVisible(on);
+  }
+
+  destroy(): void {
+    this.container.destroy();
   }
 
   /** Apply facing, look direction, misregistration (+ extra) and blink. */
@@ -58,10 +75,13 @@ export class RisoCharacterView {
 
   /** Linework boil (swaps variant only when it changes). */
   tick(tMs: number): void {
-    const v = boilVariant(tMs, this.id);
+    const v = boilVariant(tMs + this.boilPhaseMs, this.id);
     if (v !== this.variant) {
       this.variant = v;
       this.line.setTexture(RISO_KEYS.charLine(this.id, v));
+      if (this.speedlines) {
+        this.speedlines.setFlipY(v === 1);
+      }
     }
   }
 }
