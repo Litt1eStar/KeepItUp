@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { PLAYERS, type Shape } from '../config/players';
 import { TUNING as T } from '../config/tuning';
 import { RS } from '../config/render';
+import { generateRisoTextures } from '../art/textures';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -33,6 +34,8 @@ export class BootScene extends Phaser.Scene {
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 16, 16);
     });
+
+    generateRisoTextures(this);
 
     this.scene.start('Lobby');
   }
