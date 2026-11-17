@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import '@fontsource/lilita-one/400.css'; // bundled locally: works offline at the booth
+import '@fontsource/anton/400.css';
+import '@fontsource/space-mono/400.css';
+import '@fontsource/space-mono/700.css';
 import { TUNING as T } from './config/tuning';
 import { RS } from './config/render';
 import { BootScene } from './scenes/BootScene';
@@ -11,7 +14,12 @@ async function start(): Promise<void> {
   // Make sure the font is ready before any text is rasterized, otherwise the first
   // screen renders with the fallback font.
   try {
-    await document.fonts.load('40px "Lilita One"');
+    await Promise.all([
+      document.fonts.load('40px "Lilita One"'),
+      document.fonts.load('40px "Anton"'),
+      document.fonts.load('20px "Space Mono"'),
+      document.fonts.load('bold 20px "Space Mono"'),
+    ]);
   } catch {
     /* fall back to Arial Black */
   }
