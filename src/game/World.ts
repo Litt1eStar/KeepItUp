@@ -2,7 +2,9 @@ import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
 import { PLAYERS, type PlayerId } from '../config/players';
-import { Player } from '../entities/Player';
+import { Player, type LookTarget } from '../entities/Player';
+import { RISO_KEYS } from '../art/textures';
+import { arrowBob, arrowVisible, offscreenScale } from '../art/motion';
 import { Ball } from '../entities/Ball';
 import type { InputSource } from '../input/InputManager';
 import { entersDangerZone, pickNextTarget, pickSpawnTarget, resolveHit } from '../logic/TurnSystem';
@@ -30,6 +32,9 @@ export class World extends Phaser.Events.EventEmitter {
   bestCombo = 0;
   private arrows = new Map<PlayerId, Phaser.GameObjects.Image>();
   private offscreen = new Map<Ball, Phaser.GameObjects.Image>();
+  /** Last scale step shown per off-screen indicator (avoid re-setting every frame). */
+  private offscreenShownScale = new Map<Ball, number>();
+  private readonly look: LookTarget = { x: 0, y: 0 };
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -53,7 +58,7 @@ export class World extends Phaser.Events.EventEmitter {
     if (existing) return existing;
     const p = new Player(this.scene, PLAYERS[id]);
     this.players.push(p);
-    this.arrows.set(id, this.scene.add.image(p.x, p.top - 30, `arrow${id}`).setScale(S).setDepth(15).setVisible(false));
+    this.arrows.set(id, this.scene.add.image(p.x, p.top - 30, RISO_KEYS.arrow(id)).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(25).setVisible(false));
     return p;
   }
 
@@ -62,7 +67,7 @@ export class World extends Phaser.Events.EventEmitter {
     const bx = x ?? Phaser.Math.Between(140, T.width - 140);
     const ball = new Ball(this.scene, bx, 120, target, floatTime); // below the HUD strip
     this.balls.push(ball);
-    this.offscreen.set(ball, this.scene.add.image(bx, 18, `offscreen${target}`).setScale(S).setDepth(48) /* above HUD text */.setVisible(false));
+    this.offscreen.set(ball, this.scene.add.image(bx, 18, RISO_KEYS.offscreen(target)).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(48) /* above HUD text */.setVisible(false));
     return ball;
   }
 
@@ -70,6 +75,7 @@ export class World extends Phaser.Events.EventEmitter {
     ball.destroy();
     this.offscreen.get(ball)?.destroy();
     this.offscreen.delete(ball);
+    this.offscreenShownScale.delete(ball);
     this.balls = this.balls.filter((b) => b !== ball);
   }
 
@@ -220,7 +226,7 @@ export class World extends Phaser.Events.EventEmitter {
     ball.hitCooldown = T.hitCooldown;
     ball.inDanger = false;
     ball.setTarget(next);
-    this.offscreen.get(ball)?.setTexture(`offscreen${next}`);
+    this.offscreen.get(ball)?.setTexture(RISO_KEYS.offscreen(next));
     const ev: HitEvent = { ball, player: p, correct, combo: this.combo, jumpHit, dashPass };
     this.emit('hit', ev);
   }
@@ -234,7 +240,7 @@ export class World extends Phaser.Events.EventEmitter {
   }
 
   render(dt: number, time: number): void {
-    for (const p of this.players) p.render(dt);
+    for (const p of this.players) p.render(dt, time, this.lookTargetFor(p));
     for (const b of this.balls) {
       b.render(dt, time);
       // Off-screen indicator pinned to the top edge when a ball flies above the screen.
@@ -242,17 +248,49 @@ export class World extends Phaser.Events.EventEmitter {
       if (ind) {
         const above = b.bottom < 0;
         ind.setVisible(above);
-        if (above) ind.setPosition(Phaser.Math.Clamp(b.x, 24, T.width - 24), 26).setScale(S * Phaser.Math.Clamp(1.2 - -b.y / 600, 0.6, 1.2));
+        if (above) {
+          ind.setPosition(Phaser.Math.Clamp(b.x, 24, T.width - 24), 26);
+          const sc = offscreenScale(b.y);
+          if (this.offscreenShownScale.get(b) !== sc) {
+            this.offscreenShownScale.set(b, sc);
+            ind.setScale(S * sc);
+          }
+        }
       }
     }
-    // Blinking arrow above every player who has at least one ball targeting them.
+    // Blinking arrow above every player who has at least one ball targeting them (stepped blink + bob).
+    const bob = arrowBob(time);
     for (const p of this.players) {
       const arrow = this.arrows.get(p.id)!;
-      const count = this.balls.filter((b) => b.target === p.id).length;
-      const blinkRate = count > 1 ? 0.018 : 0.01;
-      arrow.setVisible(count > 0 && Math.sin(time * blinkRate) > -0.3);
-      arrow.setPosition(p.x, p.top - 26 + Math.sin(time * 0.012) * 4);
+      let count = 0;
+      for (const b of this.balls) if (b.target === p.id) count++;
+      const on = count > 0 && arrowVisible(time, count > 1);
+      arrow.setVisible(on);
+      if (on) arrow.setPosition(p.x, p.top - 22 + bob);
     }
+  }
+
+  /**
+   * What player p's eyes follow (render only; no allocation): the lowest ball targeting p,
+   * else the nearest ball, else null (look forward).
+   */
+  private lookTargetFor(p: Player): LookTarget | null {
+    let pick: Ball | null = null;
+    for (const b of this.balls) if (b.target === p.id && (!pick || b.y > pick.y)) pick = b;
+    if (!pick) {
+      let best = Infinity;
+      for (const b of this.balls) {
+        const d = (b.x - p.x) ** 2 + (b.y - p.y) ** 2;
+        if (d < best) {
+          best = d;
+          pick = b;
+        }
+      }
+    }
+    if (!pick) return null;
+    this.look.x = pick.x;
+    this.look.y = pick.y;
+    return this.look;
   }
 
   destroy(): void {

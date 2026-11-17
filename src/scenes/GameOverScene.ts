@@ -46,7 +46,7 @@ export class GameOverScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     AudioManager.init(this);
-    drawStage(this, false);
+    drawStage(this);
     this.add.rectangle(T.width / 2, T.height / 2, T.width, T.height, 0x000000, 0.45);
     this.inputMgr = new InputManager(this);
 

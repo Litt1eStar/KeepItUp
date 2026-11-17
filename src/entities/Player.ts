@@ -3,6 +3,20 @@ import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
 import type { PlayerDef } from '../config/players';
 import type { PlayerInput } from '../input/InputManager';
+import { CHAR_R, CHAR_SHADOW_R, charShadowScale, charShadowStep } from '../art/characters';
+import { shadowTexSize } from '../art/ball';
+import { stepSquash } from '../art/motion';
+import { RISO_KEYS } from '../art/textures';
+import { RisoCharacterView, type CharPose } from '../art/views/RisoCharacterView';
+
+/** Where the eyes should look this frame (world coords), or null to look forward. */
+export interface LookTarget {
+  x: number;
+  y: number;
+}
+
+const DASH_LEAN = 0.12;
+const DASH_STRETCH = { sx: 1.15, sy: 0.88 } as const;
 
 /**
  * Player with hand-rolled kinematics (instead of Arcade bodies) so stacking on heads
@@ -21,8 +35,16 @@ export class Player {
   dashCooldown = 0;
   dashDir: 1 | -1 = 1;
   dxThisFrame = 0;
-  readonly sprite: Phaser.GameObjects.Image;
+  /** Riso character (fill + boiling line + pupils); container origin = feet. */
+  readonly view: RisoCharacterView;
+  private readonly shadow: Phaser.GameObjects.Image;
   private squash = 0;
+  // render cache: only touch Phaser objects when the stepped value changes
+  private readonly pose: CharPose = { face: 1, lookX: 0, lookY: 0 };
+  private shownSquash = NaN;
+  private shownDash = false;
+  private shownFace: 1 | -1 = 1;
+  private shadowStep = -1;
 
   readonly w = T.playerWidth;
   readonly h = T.playerHeight;
@@ -31,11 +53,12 @@ export class Player {
     this.x = x;
     this.y = T.floorY;
     this.prevY = this.y;
-    this.sprite = scene.add.image(x, this.y, `player${def.id}`).setOrigin(0.5, 1).setScale(S).setDepth(10);
-    this.shadow = scene.add.ellipse(x, T.floorY + 2, this.w * 1.1, 10, 0x0a0614, 0.45).setDepth(3);
+    this.view = new RisoCharacterView(scene, def.id);
+    this.view.container.setPosition(x, this.y).setDepth(10);
+    // halftone contact shadow: bottom edge on the floor line, under the character's feet
+    this.shadow = scene.add.image(x, T.floorY - shadowTexSize(CHAR_SHADOW_R).h / 2, RISO_KEYS.charShadow(0))
+      .setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(3);
   }
-
-  private readonly shadow: Phaser.GameObjects.Ellipse;
 
   get id() {
     return this.def.id;
@@ -113,19 +136,50 @@ export class Player {
     this.standingOn = base;
   }
 
-  render(dt: number): void {
+  /**
+   * Draw at the feet. `look` = the ball the eyes should follow (null → look forward); tMs drives the boil.
+   * Squash/stretch, dash lean and the shadow only update the view when their stepped value changes.
+   */
+  render(dt: number, tMs: number, look: LookTarget | null): void {
     this.squash = Phaser.Math.Linear(this.squash, 0, Math.min(1, dt * 12));
-    const sx = 1 + this.squash;
-    const sy = 1 - this.squash;
-    this.sprite.setPosition(this.x, this.y).setScale(sx * this.facing * S, sy * S);
-    this.sprite.setAlpha(this.dashing ? 0.75 : 1);
-    // Contact shadow: shrinks and fades as the player gets higher off the floor.
-    const lift = Phaser.Math.Clamp((T.floorY - this.y) / 220, 0, 1);
-    this.shadow.setPosition(this.x, T.floorY + 2).setScale(1 - lift * 0.5, 1 - lift * 0.4).setAlpha(0.45 * (1 - lift * 0.7));
+    const dashing = this.dashing;
+    const face = dashing ? this.dashDir : this.facing;
+    const c = this.view.container;
+    c.setPosition(this.x, this.y);
+
+    const sq = stepSquash(this.squash);
+    if (sq !== this.shownSquash || dashing !== this.shownDash || face !== this.shownFace) {
+      this.shownSquash = sq;
+      this.shownDash = dashing;
+      this.shownFace = face;
+      if (dashing) c.setScale(DASH_STRETCH.sx, DASH_STRETCH.sy).setRotation(face * DASH_LEAN);
+      else c.setScale(1 + sq, 1 - sq).setRotation(0);
+      this.view.setSpeedlines(dashing);
+    }
+
+    const p = this.pose;
+    p.face = face;
+    if (look) {
+      p.lookX = look.x - this.x;
+      p.lookY = look.y - (this.y - CHAR_R);
+    } else {
+      p.lookX = face;
+      p.lookY = 0;
+    }
+    this.view.pose(p);
+    this.view.tick(tMs);
+
+    // Contact shadow: sparser and smaller as the feet rise off the floor.
+    const step = charShadowStep(T.floorY - this.y);
+    if (step !== this.shadowStep) {
+      this.shadowStep = step;
+      this.shadow.setTexture(RISO_KEYS.charShadow(step)).setScale(S * charShadowScale(step));
+    }
+    this.shadow.x = this.x;
   }
 
   destroy(): void {
     this.shadow.destroy();
-    this.sprite.destroy();
+    this.view.destroy();
   }
 }

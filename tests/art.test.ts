@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   BODY_R, CHAR_R, CHAR_TEX, EYE_LAYOUT, EYE_LINE_W, OUTLINE_W, PUPIL_TEX_R,
   charMisreg, charOutlineExtent, eyeOutline, pupilPos, pupilScale,
+  CHAR_SHADOW_R, charShadowScale, charShadowStep,
 } from '../src/art/characters';
+import { ARROW_GLYPH_SIZE, ARROW_TEX, arrowExtent, arrowGlyphCenter, arrowTriangle } from '../src/art/arrow';
 import { SHADOW_STEPS, ballArt, ballLineExtent, ballMisreg, ballSpinTicks, shadowDensity, shadowStep, shadowTexSize } from '../src/art/ball';
 import { STAMP_IDS, STAMP_TEXT, formatRank, formatScore } from '../src/art/ui';
 import { SPLAT_SIZE, splatLineExtent, splatMaxExtent, splatShapes } from '../src/art/splat';
@@ -226,12 +228,53 @@ describe('shapes, halftone jitter, keys', () => {
   });
   it('enumerates every riso key once, all prefixed', () => {
     const keys = allRisoKeys();
-    const expected = 6 + 3 + 3 * BOIL_VARIANTS + 3 + BOIL_VARIANTS + 2 * SHADOW_STEPS + STAMP_IDS.length + 2 * BOIL_VARIANTS + 3;
+    const expected = 6 + 3 + 3 * BOIL_VARIANTS + 3 + BOIL_VARIANTS + 3 * SHADOW_STEPS + 3 + 3 + STAMP_IDS.length + 2 * BOIL_VARIANTS + 3;
     expect(keys).toHaveLength(expected);
-    expect(expected).toBe(56);
+    expect(expected).toBe(70);
+    for (const id of [0, 1, 2] as const) {
+      expect(keys).toContain(RISO_KEYS.arrow(id));
+      expect(keys).toContain(RISO_KEYS.offscreen(id));
+    }
+    expect(keys).toContain(RISO_KEYS.charShadow(SHADOW_STEPS - 1));
     for (let v = 0; v < BOIL_VARIANTS; v++) expect(keys).toContain(RISO_KEYS.splatLine(v));
     for (const k of keys) expect(k.startsWith('riso:')).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys).toContain(RISO_KEYS.stamp('PLUS_BALL'));
+  });
+});
+
+describe('play-field art: arrows + character shadow', () => {
+  it('arrow triangles fit the texture with keyline, wobble and misregistration', () => {
+    const e = arrowExtent();
+    expect(e.x).toBeLessThanOrEqual(ARROW_TEX.w / 2);
+    expect(e.y).toBeLessThanOrEqual(ARROW_TEX.h / 2);
+    for (const up of [false, true]) {
+      for (const [x, y] of arrowTriangle(up)) {
+        expect(x).toBeGreaterThan(0);
+        expect(x).toBeLessThan(ARROW_TEX.w);
+        expect(y).toBeGreaterThan(0);
+        expect(y).toBeLessThan(ARROW_TEX.h);
+      }
+    }
+  });
+  it('turn arrow points down, off-screen indicator points up', () => {
+    expect(arrowTriangle(false)[0][1]).toBeGreaterThan(ARROW_TEX.h / 2);
+    expect(arrowTriangle(true)[0][1]).toBeLessThan(ARROW_TEX.h / 2);
+  });
+  it('every shape glyph sits fully inside its arrow triangle', () => {
+    for (const up of [false, true]) {
+      const tri = arrowTriangle(up);
+      const [gx, gy] = arrowGlyphCenter(up);
+      for (const shape of ['triangle', 'circle', 'square'] as const) {
+        for (const p of shapePoints(shape, gx, gy, ARROW_GLYPH_SIZE + 0.8)) expect(polygonClearance(tri, p)).toBeGreaterThan(0.5);
+      }
+    }
+  });
+  it('character contact shadow: dense when standing, sparse and smaller when high', () => {
+    expect(charShadowStep(0)).toBe(SHADOW_STEPS - 1);
+    expect(charShadowStep(1000)).toBe(0);
+    expect(charShadowScale(SHADOW_STEPS - 1)).toBe(1);
+    expect(charShadowScale(0)).toBeLessThan(1);
+    expect(shadowTexSize(CHAR_SHADOW_R).w).toBeGreaterThanOrEqual(CHAR_R * 2);
   });
 });

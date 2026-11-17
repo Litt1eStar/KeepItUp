@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
-import { S } from '../config/render';
 import type { PlayerId } from '../config/players';
+import { spawnPulse } from '../art/motion';
+import { RisoBallView } from '../art/views/RisoBallView';
 
 /**
  * Ball with custom physics. Each ball has its own speed multiplier which scales *time*
@@ -21,9 +22,9 @@ export class Ball {
   inDanger = false;
   readonly r = T.ballRadius;
 
-  readonly sprite: Phaser.GameObjects.Image;
-  readonly shadow: Phaser.GameObjects.Ellipse;
-  private spin = 0;
+  /** Riso ball (MULTIPLY ink + boiling ring, stepped spin) with its halftone floor shadow. */
+  readonly view: RisoBallView;
+  private shownInk: PlayerId;
 
   constructor(scene: Phaser.Scene, x: number, y: number, target: PlayerId, floatTime = 1.2) {
     this.x = x;
@@ -31,8 +32,10 @@ export class Ball {
     this.target = target;
     this.floatTime = floatTime;
     this.prevBottom = y + this.r;
-    this.shadow = scene.add.ellipse(x, T.floorY + 4, this.r * 2, 12, 0x000000, 0.2).setDepth(2);
-    this.sprite = scene.add.image(x, y, `ball${target}`).setScale(S).setDepth(20);
+    this.shownInk = target;
+    this.view = new RisoBallView(scene, target, { shadow: true });
+    this.view.container.setPosition(x, y).setDepth(20);
+    this.view.shadow!.setDepth(2);
   }
 
   get bottom() {
@@ -40,8 +43,7 @@ export class Ball {
   }
 
   setTarget(target: PlayerId): void {
-    this.target = target;
-    this.sprite.setTexture(`ball${target}`);
+    this.target = target; // the view re-inks (with its stamp punch) on the next render
   }
 
   step(dt: number): void {
@@ -68,22 +70,22 @@ export class Ball {
     }
   }
 
-  render(dt: number, time: number): void {
-    this.spin += this.vx * dt * 0.02;
-    const pulse = this.floatTime > 0 ? 1 + Math.sin(time * 0.02) * 0.08 : 1;
-    this.sprite.setPosition(this.x, this.y).setRotation(this.spin).setScale(pulse * S);
-    this.sprite.setAlpha(this.floatTime > 0 ? 0.6 + 0.4 * Math.abs(Math.sin(time * 0.01)) : 1);
-
-    // Fall warning: shadow darkens and grows as the ball nears the floor; red in the danger zone.
-    const h = Phaser.Math.Clamp(T.floorY - this.bottom, 0, 420);
-    const t = 1 - h / 420;
-    this.shadow.setPosition(this.x, T.floorY + 4);
-    this.shadow.setSize(this.r * (0.8 + 1.4 * t), 8 + 8 * t);
-    this.shadow.setFillStyle(this.inDanger ? 0xff2a2a : 0x000000, 0.12 + 0.68 * t);
+  /** Draw the ball; `time` (ms) drives boil, stepped spin, ink punch and the spawn pulse. */
+  render(_dt: number, time: number): void {
+    const v = this.view;
+    if (this.target !== this.shownInk) {
+      this.shownInk = this.target;
+      v.setInk(this.target, time);
+    }
+    v.container.setPosition(this.x, this.y);
+    // Floating spawn telegraph: stepped scale pulse (no alpha fades).
+    v.setScaleMul(this.floatTime > 0 ? spawnPulse(time) : 1);
+    v.tick(time);
+    // Fall warning: halftone shadow gets denser as the ball drops, pink below the danger line.
+    v.updateShadow(this.x, this.bottom);
   }
 
   destroy(): void {
-    this.sprite.destroy();
-    this.shadow.destroy();
+    this.view.destroy();
   }
 }

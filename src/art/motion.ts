@@ -99,3 +99,35 @@ export function idlePose(id: PlayerId, tMs: number, out: IdlePose = { dy: 0, rot
   }
   return out;
 }
+
+const ARROW_BLINK_STEPS = 6; // one blink cycle = 6 idle steps (~0.5 s)
+const ARROW_BLINK_STEPS_FAST = 4; // several balls on you → faster (~0.33 s)
+
+/** Stepped turn-arrow blink (visibility, never alpha): on for 2/3 of each cycle. `fast` when 2+ balls target the player. */
+export function arrowVisible(tMs: number, fast: boolean): boolean {
+  const n = fast ? ARROW_BLINK_STEPS_FAST : ARROW_BLINK_STEPS;
+  return Math.floor(Math.max(0, tMs) / STEP_MS) % n < Math.ceil((n * 2) / 3);
+}
+
+/** Stepped bob (px, ≤ 0 = up) for the turn arrow: two positions, swapped every 2 idle steps. */
+export function arrowBob(tMs: number): number {
+  return Math.floor(Math.max(0, tMs) / (STEP_MS * 2)) % 2 === 0 ? 0 : -3;
+}
+
+/** Off-screen indicator scale from the ball's y (< 0 above the screen): bigger when close, 0.6..1.2 in 0.2 steps. */
+export function offscreenScale(ballY: number): number {
+  const s = Math.min(1.2, Math.max(0.6, 1.2 + ballY / 600));
+  return Math.round(s * 5) / 5;
+}
+
+const SPAWN_PULSE = [1, 1.08, 1.16, 1.08] as const;
+
+/** Floating-spawn telegraph: stepped scale pulse (one value per idle step). */
+export function spawnPulse(tMs: number): number {
+  return SPAWN_PULSE[Math.floor(Math.max(0, tMs) / STEP_MS) % SPAWN_PULSE.length];
+}
+
+/** Displayed squash, quantized to 0.05 so the view only rescales in visible steps. */
+export function stepSquash(squash: number): number {
+  return Math.round(squash * 20) / 20;
+}

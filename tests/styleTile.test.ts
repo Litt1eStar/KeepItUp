@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   BLINK_PERIOD_STEPS, BOIL_MS, JOLT_MS, JOLT_PX, STEP_MS, boilVariant, facingToward, idlePose, inkPunch, joltOffset,
-  quantizeTime, shadowChoice, slamScale, spinAngle,
+  quantizeTime, shadowChoice, slamScale, spinAngle, arrowBob, arrowVisible, offscreenScale, spawnPulse, stepSquash,
 } from '../src/art/motion';
 import { INK_CYCLE_MS, ballInkAt, demoBallPos, demoWrongHit, dotsFilledAt, periodIndex } from '../src/art/styleTileMotion';
 import { SHADOW_STEPS } from '../src/art/ball';
@@ -141,5 +141,37 @@ describe('stamp inks', () => {
     // the natural lobby call: player ink for P3 is yellow
     expect(stampTint(PLAYER_INK[2])).not.toBe(INK_HEX.yellow);
     for (const id of STAMP_IDS) expect(stampTint(STAMP_INK[id])).toBe(STAMP_INK[id]);
+  });
+});
+
+describe('play-field runtime timing', () => {
+  it('turn-arrow blink is stepped visibility and faster with several balls', () => {
+    const flips = (fast: boolean) => {
+      let n = 0;
+      for (let t = 0; t < 2000; t += 10) if (arrowVisible(t, fast) !== arrowVisible(t + 10, fast)) n++;
+      return n;
+    };
+    expect(arrowVisible(0, false)).toBe(true);
+    expect(flips(true)).toBeGreaterThan(flips(false));
+    expect(flips(false)).toBeGreaterThan(0);
+  });
+  it('arrow bob takes only two positions', () => {
+    const vals = new Set<number>();
+    for (let t = 0; t < 3000; t += 7) vals.add(arrowBob(t));
+    expect([...vals].sort()).toEqual([-3, 0]);
+  });
+  it('off-screen indicator scale is stepped, clamped and grows as the ball comes back', () => {
+    expect(offscreenScale(-10000)).toBeCloseTo(0.6);
+    expect(offscreenScale(0)).toBeCloseTo(1.2);
+    expect(offscreenScale(-100)).toBeGreaterThanOrEqual(offscreenScale(-300));
+    for (let y = -800; y <= 0; y += 13) expect(Math.round(offscreenScale(y) * 5)).toBeCloseTo(offscreenScale(y) * 5);
+  });
+  it('spawn pulse and squash are stepped', () => {
+    const vals = new Set<number>();
+    for (let t = 0; t < 2000; t += 5) vals.add(spawnPulse(t));
+    expect(vals.size).toBeLessThanOrEqual(3);
+    expect(Math.min(...vals)).toBe(1);
+    expect(stepSquash(0.013)).toBe(0);
+    expect(stepSquash(-0.25)).toBe(-0.25);
   });
 });

@@ -24,6 +24,7 @@ export class RisoBallView {
   private inkChangedAt = -Infinity;
   private sx = 1;
   private sy = 1;
+  private scaleMul = 1;
 
   constructor(scene: Phaser.Scene, inkId: PlayerId, opts: { shadow?: boolean } = {}) {
     const m = ballMisreg(inkId);
@@ -42,6 +43,11 @@ export class RisoBallView {
     this.inkChangedAt = tMs;
   }
 
+  /** Extra uniform scale on top of the ink punch (e.g. a stepped spawn pulse); applied on the next tick. */
+  setScaleMul(k: number): void {
+    this.scaleMul = k;
+  }
+
   /** Boil, stepped spin and ink-change punch. */
   tick(tMs: number): void {
     const v = boilVariant(tMs);
@@ -56,10 +62,12 @@ export class RisoBallView {
       this.fill.setRotation(a);
     }
     const p = inkPunch(tMs - this.inkChangedAt);
-    if (p.sx !== this.sx || p.sy !== this.sy) {
-      this.sx = p.sx;
-      this.sy = p.sy;
-      this.container.setScale(p.sx, p.sy);
+    const sx = p.sx * this.scaleMul;
+    const sy = p.sy * this.scaleMul;
+    if (sx !== this.sx || sy !== this.sy) {
+      this.sx = sx;
+      this.sy = sy;
+      this.container.setScale(sx, sy);
     }
   }
 

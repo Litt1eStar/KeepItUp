@@ -15,6 +15,7 @@ import { PLAYERS, type PlayerId } from '../config/players';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE, PLAYER_INK } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, seeded, speckle, tracePath, wobblePoints } from './riso';
+import { SHADOW_STEPS, shadowStep } from './ball';
 import { handLine, inkLayer, knockOut, strokeWobbly, traceShape, type Pt } from './draw';
 
 type Ctx = CanvasRenderingContext2D;
@@ -95,6 +96,22 @@ export function pupilPos(
   out.x = facing * e.x + ox;
   out.y = -CHAR_R + e.y + oy;
   return out;
+}
+
+/** Contact shadow "radius" (drawShadow/shadowTexSize units): the shadow is ~1.1× the body wide. */
+export const CHAR_SHADOW_R = CHAR_R * 1.1;
+/** Feet height above the floor at which the contact shadow reaches its sparsest step. */
+export const CHAR_SHADOW_MAX_LIFT = 220;
+
+/**
+ * Contact-shadow step for feet `liftPx` above the floor (SHADOW_STEPS-1 = standing, dense; 0 = high)
+ * and its display scale (shrinks as the character rises, so it reads as distance). Pure, no allocation.
+ */
+export function charShadowStep(liftPx: number): number {
+  return shadowStep(liftPx, CHAR_SHADOW_MAX_LIFT);
+}
+export function charShadowScale(step: number): number {
+  return 0.55 + (0.45 * step) / (SHADOW_STEPS - 1);
 }
 
 /** Speed lines texture: streaks trail to the left; place with origin (1, 0.5) at the character's back. */

@@ -33,6 +33,7 @@ export class RisoCharacterView {
   private readonly tmp = { x: 0, y: 0 };
   private speedlines: Phaser.GameObjects.Image | null = null;
   private variant = 0;
+  private face: 1 | -1 = 1;
 
   /** boilPhaseMs offsets this character's linework boil so several characters don't swap in sync. */
   constructor(private readonly scene: Phaser.Scene, readonly id: PlayerId, private readonly boilPhaseMs = 0) {
@@ -44,14 +45,22 @@ export class RisoCharacterView {
     this.pose({ face: 1, lookX: 0, lookY: 0 });
   }
 
-  /** Show/hide MULTIPLY speed lines trailing behind the character's back (they follow its squash/tilt). */
+  /** Show/hide MULTIPLY speed lines trailing behind the character's back (they follow its squash/tilt and facing). */
   setSpeedlines(on: boolean): void {
     if (on && !this.speedlines) {
-      this.speedlines = this.scene.add.image(-CHAR_R * 1.1, -CHAR_R, RISO_KEYS.speedlines)
-        .setOrigin(1, 0.5).setScale(S * 1.1).setBlendMode(Phaser.BlendModes.MULTIPLY);
+      this.speedlines = this.scene.add.image(0, -CHAR_R, RISO_KEYS.speedlines)
+        .setScale(S * 1.1).setBlendMode(Phaser.BlendModes.MULTIPLY);
       this.container.addAt(this.speedlines, 0);
+      this.placeSpeedlines();
     }
     this.speedlines?.setVisible(on);
+  }
+
+  /** Speed lines sit behind the back: left of the body facing +x, mirrored to the right facing -x. */
+  private placeSpeedlines(): void {
+    const sl = this.speedlines;
+    if (!sl) return;
+    sl.setOrigin(this.face > 0 ? 1 : 0, 0.5).setX(-this.face * CHAR_R * 1.1).setFlipX(this.face < 0);
   }
 
   destroy(): void {
@@ -62,6 +71,10 @@ export class RisoCharacterView {
   pose(p: CharPose): void {
     const extra = p.extraMisreg ?? ZERO;
     const blink = p.blink === true;
+    if (p.face !== this.face) {
+      this.face = p.face;
+      this.placeSpeedlines();
+    }
     this.fill.setFlipX(p.face < 0).setPosition(this.misreg.dx + extra.dx, this.misreg.dy + extra.dy);
     this.line.setFlipX(p.face < 0);
     const sy = S * (blink ? BLINK_SCALE_Y : 1);

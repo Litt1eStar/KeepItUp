@@ -74,7 +74,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     AudioManager.init(this);
-    drawStage(this, true);
+    drawStage(this);
     this.inputMgr = new InputManager(this);
     this.world = new World(this, true);
     this.juice = new Juice(this);

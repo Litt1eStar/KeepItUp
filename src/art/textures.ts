@@ -2,19 +2,20 @@
  * Registers every riso texture with Phaser at boot. Textures are drawn at RS× resolution
  * (display images with .setScale(S)). All keys are prefixed `riso:`; use RISO_KEYS, not strings.
  *
- * Origins: characters (fill/line) (0.5, 1) — see CHAR_TEX; pupil, balls, shadows, stamps, splats,
- * splat keylines, dots (0.5, 0.5); speedlines (1, 0.5) at the character's back; bg/ticket/receipt (0, 0).
+ * Origins: characters (fill/line) (0.5, 1) — see CHAR_TEX; pupil, balls, shadows, character shadows,
+ * arrows, off-screen indicators, stamps, splats, splat keylines, dots (0.5, 0.5); speedlines (1, 0.5) at the character's back; bg/ticket/receipt (0, 0).
  */
 import type Phaser from 'phaser';
 import { PLAYERS, type PlayerId } from '../config/players';
 import { RS } from '../config/render';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE } from './palette';
-import { CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
+import { CHAR_SHADOW_R, CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
 import { SHADOW_STEPS, ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
 import { drawStage } from './stage';
 import { DOT_TEX, RECEIPT, STAMP_IDS, TICKET, drawDot, drawReceipt, drawStamp, drawTicket, stampSize, type StampId } from './ui';
 import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
+import { ARROW_TEX, drawArrow } from './arrow';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -31,6 +32,12 @@ export const RISO_KEYS = {
   ballLine: (v: number) => `riso:ball:line:${v}`,
   shadow: (n: number) => `riso:shadow:${n}`,
   shadowDanger: (n: number) => `riso:shadowDanger:${n}`,
+  /** Character contact shadow (black halftone), same SHADOW_STEPS density steps as the ball's. */
+  charShadow: (n: number) => `riso:charShadow:${n}`,
+  /** Turn arrow (points down at the player's head); display with MULTIPLY. */
+  arrow: (id: PlayerId) => `riso:arrow${id}`,
+  /** Off-screen indicator (points up, pinned to the top edge); display with MULTIPLY. */
+  offscreen: (id: PlayerId) => `riso:offscreen${id}`,
   stamp: (id: StampId) => `riso:stamp:${id}`,
   splat: (v: number) => `riso:splat:${v}`,
   /** Black keyline matching splat(v) (untinted). Layered on top when splatNeedsKeyline(tint), i.e. yellow. */
@@ -55,6 +62,9 @@ export function allRisoKeys(): string[] {
     ...range(BOIL_VARIANTS).map(K.ballLine),
     ...range(SHADOW_STEPS).map(K.shadow),
     ...range(SHADOW_STEPS).map(K.shadowDanger),
+    ...range(SHADOW_STEPS).map(K.charShadow),
+    ...IDS.map(K.arrow),
+    ...IDS.map(K.offscreen),
     ...STAMP_IDS.map(K.stamp),
     ...range(BOIL_VARIANTS).map(K.splat),
     ...range(BOIL_VARIANTS).map(K.splatLine),
@@ -97,6 +107,14 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
   for (let n = 0; n < SHADOW_STEPS; n++) {
     tex(K.shadow(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.black, INK_ANGLE.black));
     tex(K.shadowDanger(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.pink, INK_ANGLE.pink));
+  }
+  const csh = shadowTexSize(CHAR_SHADOW_R);
+  for (let n = 0; n < SHADOW_STEPS; n++) {
+    tex(K.charShadow(n), csh.w, csh.h, (c) => drawShadow(c, CHAR_SHADOW_R, n, INK.black, INK_ANGLE.black));
+  }
+  for (const p of PLAYERS) {
+    tex(K.arrow(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, false));
+    tex(K.offscreen(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, true));
   }
 
   const measure = document.createElement('canvas').getContext('2d')!;

@@ -34,7 +34,7 @@ export class LobbyScene extends Phaser.Scene {
     this.idle = 0;
     this.cards = [];
     AudioManager.init(this);
-    drawStage(this, false);
+    drawStage(this);
     this.inputMgr = new InputManager(this);
     this.world = new World(this, false);
     this.juice = new Juice(this);
