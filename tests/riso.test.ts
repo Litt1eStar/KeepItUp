@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { seeded, halftoneDots, misregOffset, wobblePoints } from '../src/art/riso';
+import { seeded, halftoneDots, misregOffset, wobblePoints, circlePoints } from '../src/art/riso';
 import { PAPER, PAPER_HEX, INK, INK_HEX, PLAYER_INK } from '../src/art/palette';
 
 describe('seeded', () => {
@@ -84,5 +84,35 @@ describe('palette', () => {
     expect(PLAYER_INK[0]).toBe('pink');
     expect(PLAYER_INK[1]).toBe('blue');
     expect(PLAYER_INK[2]).toBe('yellow');
+  });
+});
+
+describe('halftoneDots guards and bleed', () => {
+  it('returns [] for unsafe inputs', () => {
+    expect(halftoneDots(100, 100, NaN, 10)).toEqual([]);
+    expect(halftoneDots(Infinity, 100, 0.5, 10)).toEqual([]);
+    expect(halftoneDots(100, 100, 0.5, 0)).toEqual([]);
+  });
+  it('bleed puts a dot near every corner', () => {
+    const w = 100, h = 100, cell = 10;
+    const corners = [[0, 0], [w, 0], [0, h], [w, h]];
+    for (const ang of [0, 15, 45, 75]) {
+      const dots = halftoneDots(w, h, 0.5, cell, ang, { bleed: true });
+      for (const [cx, cy] of corners) {
+        expect(dots.some((p) => Math.hypot(p.x - cx, p.y - cy) <= cell)).toBe(true);
+      }
+    }
+  });
+  it('honors origin', () => {
+    const dots = halftoneDots(100, 100, 0.5, 10, 0, { origin: { x: 3, y: 4 } });
+    expect(dots.some((p) => Math.abs(p.x - 3) < 1e-9 && Math.abs(p.y - 4) < 1e-9)).toBe(true);
+  });
+});
+
+describe('circlePoints', () => {
+  it('returns `segments` points at distance r', () => {
+    const pts = circlePoints(5, -3, 7, 32);
+    expect(pts).toHaveLength(32);
+    for (const [x, y] of pts) expect(Math.hypot(x - 5, y + 3)).toBeCloseTo(7, 9);
   });
 });

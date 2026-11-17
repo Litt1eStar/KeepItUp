@@ -1,6 +1,9 @@
 /**
  * Risograph drawing helpers. Pure math functions (testable in node) come first,
  * then canvas helpers. No gradients or blur effects: shading is halftone dots only.
+ *
+ * Conventions: cell/amp/px sizes are LOGICAL units; the ctx is expected to be pre-scaled by the
+ * render scale. Seeds are integers (non-integers are truncated). Canvas helpers save/restore state.
  */
 import { PAPER } from './palette';
 
@@ -18,9 +21,19 @@ export function seeded(seed: number): () => number {
   };
 }
 
+export interface HalftoneOpts {
+  /** Keep dots whose center is within one radius outside the rect so edges have no empty band. Default false. */
+  bleed?: boolean;
+  /** Grid anchor in the rect's LOCAL coords (default: rect center). Share it across fills to align the same ink. */
+  origin?: { x: number; y: number };
+}
+
 /**
- * Halftone dot centers on a grid rotated by `angleDeg`, limited to dots whose center
- * lies inside the (0,0)-(w,h) rect. Radius grows with density (coverage), capped at 0.62*cell.
+ * Halftone dot centers on a grid rotated by `angleDeg` about `opts.origin`, in the rect's local
+ * (0,0)-(w,h) coords. By default only centers inside the rect are kept; with `bleed` centers up to
+ * one radius outside are kept too (the canvas/caller clip trims them). Radius grows with density,
+ * capped at 0.62*cell. All sizes are LOGICAL units. Returns [] for non-positive/NaN density,
+ * cell < 0.5, or non-finite/non-positive w or h (guards against runaway loops).
  */
 export function halftoneDots(
   w: number,
@@ -28,21 +41,28 @@ export function halftoneDots(
   density: number,
   cell: number,
   angleDeg = 15,
+  opts: HalftoneOpts = {},
 ): { x: number; y: number; r: number }[] {
+  if (!(density > 0) || !(cell >= 0.5) || !Number.isFinite(w) || !Number.isFinite(h) || !(w > 0) || !(h > 0)) {
+    return [];
+  }
   const d = clamp(density, 0, 1);
-  if (d <= 0 || cell <= 0) return [];
   const r = Math.min(cell * 0.5 * Math.sqrt(d) * 1.15, cell * 0.62);
+  const lo = opts.bleed ? -r : 0;
   const a = (angleDeg * Math.PI) / 180;
   const cos = Math.cos(a), sin = Math.sin(a);
-  const reach = Math.ceil(Math.hypot(w, h) / cell) + 1;
-  const cx = w / 2, cy = h / 2;
+  const ox = opts.origin?.x ?? w / 2;
+  const oy = opts.origin?.y ?? h / 2;
+  // Furthest rect corner from the origin bounds the grid indices needed.
+  const far = Math.max(Math.hypot(ox, oy), Math.hypot(w - ox, oy), Math.hypot(ox, h - oy), Math.hypot(w - ox, h - oy));
+  const reach = Math.ceil(far / cell) + 1 + (opts.bleed ? 1 : 0);
   const out: { x: number; y: number; r: number }[] = [];
   for (let i = -reach; i <= reach; i++) {
     for (let j = -reach; j <= reach; j++) {
       const gx = i * cell, gy = j * cell;
-      const x = cx + gx * cos - gy * sin;
-      const y = cy + gx * sin + gy * cos;
-      if (x >= 0 && x <= w && y >= 0 && y <= h) out.push({ x, y, r });
+      const x = ox + gx * cos - gy * sin;
+      const y = oy + gx * sin + gy * cos;
+      if (x >= lo && x <= w - lo && y >= lo && y <= h - lo) out.push({ x, y, r });
     }
   }
   return out;
@@ -111,7 +131,11 @@ export function tracePath(ctx: CanvasRenderingContext2D, pts: [number, number][]
   }
 }
 
-/** Fill a rect with halftone dots of `color`. Dots are positioned relative to (x,y). Respects caller's clip. */
+/**
+ * Fill a rect with halftone dots of `color`. Dots bleed past the edges by default (trim with a clip).
+ * `origin` is in the rect's local coords (relative to x,y). Inherits the caller's
+ * globalCompositeOperation/globalAlpha and clip.
+ */
 export function fillHalftone(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -122,8 +146,9 @@ export function fillHalftone(
   density: number,
   cell: number,
   angleDeg = 15,
+  opts: HalftoneOpts = {},
 ): void {
-  const dots = halftoneDots(w, h, density, cell, angleDeg);
+  const dots = halftoneDots(w, h, density, cell, angleDeg, { bleed: true, ...opts });
   if (dots.length === 0) return;
   ctx.save();
   ctx.fillStyle = color;
@@ -136,7 +161,7 @@ export function fillHalftone(
   ctx.restore();
 }
 
-/** Fill w x h with PAPER and speckle it with faint dark/light fibers. Deterministic by seed. */
+/** Fill w x h with PAPER (forces source-over, ignoring caller's composite op) and speckle it with faint dark/light fibers. Deterministic by seed. */
 export function paperGrain(ctx: CanvasRenderingContext2D, w: number, h: number, seed: number, amount = 0.06): void {
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
@@ -158,6 +183,7 @@ export function paperGrain(ctx: CanvasRenderingContext2D, w: number, h: number, 
 /**
  * Knock small low-alpha irregular blotches out of what is already drawn
  * (destination-out) to mimic uneven ink coverage. Deterministic by seed.
+ * Apply to an ink-only layer: on a canvas with painted paper it punches holes in the paper.
  */
 export function mottle(ctx: CanvasRenderingContext2D, w: number, h: number, seed: number, strength = 0.18): void {
   ctx.save();
@@ -176,7 +202,7 @@ export function mottle(ctx: CanvasRenderingContext2D, w: number, h: number, seed
   ctx.restore();
 }
 
-/** Scatter `count` tiny ink dots over the w x h area. Deterministic by seed. */
+/** Scatter `count` tiny ink dots over the w x h area. Deterministic by seed. Inherits caller's composite op. */
 export function speckle(ctx: CanvasRenderingContext2D, w: number, h: number, color: string, seed: number, count: number): void {
   ctx.save();
   ctx.fillStyle = color;
