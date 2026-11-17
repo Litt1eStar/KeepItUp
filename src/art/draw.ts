@@ -100,6 +100,26 @@ export function inkLayer(
   ctx.globalCompositeOperation = op;
   ctx.drawImage(canvas, x + offset.dx, y + offset.dy, w, h);
   ctx.restore();
+  // release the backing store now (full-stage layers are ~20 MB each at RS=3)
+  canvas.width = 0;
+  canvas.height = 0;
+}
+
+/**
+ * Signed clearance of point p inside closed polygon `poly`: distance to the nearest edge,
+ * negative when p is outside. Pure; used for layout bounds (e.g. pupils inside eyes).
+ */
+export function polygonClearance(poly: Pt[], p: Pt): number {
+  let inside = false;
+  let best = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, ay] = poly[j], [bx, by] = poly[i];
+    if ((by > p[1]) !== (ay > p[1]) && p[0] < ((ax - bx) * (p[1] - by)) / (ay - by) + bx) inside = !inside;
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / (dx * dx + dy * dy || 1)));
+    best = Math.min(best, Math.hypot(p[0] - (ax + t * dx), p[1] - (ay + t * dy)));
+  }
+  return inside ? best : -best;
 }
 
 /** Knock `path` out of what's drawn (destination-out), e.g. to let paper show through an ink. */

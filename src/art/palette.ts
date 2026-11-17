@@ -25,3 +25,11 @@ export const PLAYER_INK: Record<PlayerId, InkName> = {
   1: 'blue',
   2: 'yellow',
 };
+
+/** Halftone screen angle per ink (like separate riso drums), so overprinted screens don't moiré. */
+export const INK_ANGLE: Record<InkName, number> = {
+  yellow: 0,
+  pink: 75,
+  blue: 15,
+  black: 45,
+};

@@ -4,7 +4,7 @@
  * No Phaser import; all sizes logical.
  */
 import { PLAYERS, type PlayerId } from '../config/players';
-import { INK, PLAYER_INK } from './palette';
+import { INK, INK_ANGLE, PLAYER_INK } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, paperGrain, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { DISPLAY_FONT, MONO_FONT } from './type';
 import { densify, font, handLine, inkLayer, knockOut, roundRectPath, strokeWobbly, traceShape, type Pt } from './draw';
@@ -74,16 +74,25 @@ export function drawStamp(ctx: Ctx, id: StampId, w: number, h: number): void {
 // ---------------------------------------------------------------- splats
 
 export const SPLAT_SIZE = 64;
+const SPLAT_R = 13;
+const SPIKE_MAX = 1.7; // × SPLAT_R
+const DROP_DIST_MAX = 2.0; // × SPLAT_R
+const DROP_R_MAX = 4.2;
+
+/** Max distance from the splat center that ink can reach (pure; ≤ SPLAT_SIZE/2 so nothing clips). */
+export function splatMaxExtent(): number {
+  return Math.max(SPLAT_R * SPIKE_MAX, SPLAT_R * DROP_DIST_MAX + DROP_R_MAX * 1.15);
+}
 
 /** Ink splat in white: lumpy main blot + a few droplets, variant v. */
 export function drawSplat(ctx: Ctx, v: number): void {
   const rnd = seeded(500 + v * 11);
-  const c = SPLAT_SIZE / 2, R = 15;
+  const c = SPLAT_SIZE / 2, R = SPLAT_R;
   const pts: Pt[] = [];
   const spikes = new Set([Math.floor(rnd() * 22), Math.floor(rnd() * 22), Math.floor(rnd() * 22)]);
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * Math.PI * 2;
-    const rr = R * (spikes.has(i) ? 1.45 + rnd() * 0.25 : 0.82 + rnd() * 0.3);
+    const rr = R * (spikes.has(i) ? SPIKE_MAX - 0.25 + rnd() * 0.25 : 0.82 + rnd() * 0.3);
     pts.push([c + Math.cos(a) * rr, c + Math.sin(a) * rr]);
   }
   ctx.save();
@@ -92,13 +101,17 @@ export function drawSplat(ctx: Ctx, v: number): void {
   ctx.fill();
   const drops = 2 + Math.floor(rnd() * 2);
   for (let i = 0; i < drops; i++) {
-    const a = rnd() * Math.PI * 2, d = R * (1.65 + rnd() * 0.35), r = 1.8 + rnd() * 2.4;
+    const a = rnd() * Math.PI * 2, d = R * (DROP_DIST_MAX - 0.35 + rnd() * 0.35), r = 1.8 + rnd() * (DROP_R_MAX - 1.8);
     tracePath(ctx, wobblePoints(circlePoints(c + Math.cos(a) * d, c + Math.sin(a) * d, r, 10), v * 7 + i, r * 0.15));
     ctx.fill();
   }
   ctx.restore();
   mottle(ctx, SPLAT_SIZE, SPLAT_SIZE, 520 + v, 0.3);
-  speckle(ctx, SPLAT_SIZE, SPLAT_SIZE, '#fff', 530 + v, 6);
+  // stray specks, kept off the texture edge
+  ctx.save();
+  ctx.translate(4, 4);
+  speckle(ctx, SPLAT_SIZE - 8, SPLAT_SIZE - 8, '#fff', 530 + v, 6);
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------- ticket
@@ -110,7 +123,6 @@ const CONTROLS: Record<PlayerId, string> = {
   2: 'J/L · I jump · K dash',
 };
 const NAMES: Record<PlayerId, string> = { 0: 'PIK', 1: 'BLOOP', 2: 'BRICK' };
-const SCREEN_ANGLE = { pink: 75, blue: 15, yellow: 0, black: 45 } as const;
 
 function rectPts(x: number, y: number, w: number, h: number): Pt[] {
   return densify([[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]], 8).slice(0, -1);
@@ -118,6 +130,12 @@ function rectPts(x: number, y: number, w: number, h: number): Pt[] {
 
 /** Ticket stub for player `id`, TICKET.w × TICKET.h: paper card, perforation, character, name, controls. */
 export function drawTicket(ctx: Ctx, id: PlayerId): void {
+  ctx.save();
+  drawTicketBody(ctx, id);
+  ctx.restore();
+}
+
+function drawTicketBody(ctx: Ctx, id: PlayerId): void {
   const { w, h, perfX: px, notchR: nr } = TICKET;
   const inkName = PLAYER_INK[id];
   const ink = INK[inkName];
@@ -134,7 +152,7 @@ export function drawTicket(ctx: Ctx, id: PlayerId): void {
     c.arc(92, 52, 30, 0, Math.PI * 2);
     c.arc(92, 54, 21, 0, Math.PI * 2); // halo only: keep the face (eye whites) clean
     c.clip('evenodd');
-    fillHalftone(c, 62, 22, 60, 60, ink, 0.34, 3.6, SCREEN_ANGLE[inkName]);
+    fillHalftone(c, 62, 22, 60, 60, ink, 0.34, 3.6, INK_ANGLE[inkName]);
     c.restore();
     traceShape(c, PLAYERS[id].shape, px / 2, 54, 15);
     c.fillStyle = ink;
@@ -262,7 +280,7 @@ export function drawReceipt(ctx: Ctx): void {
     c.beginPath();
     c.rect(14, 71, w - 28, 13);
     c.clip();
-    fillHalftone(c, 14, 71, w - 28, 13, INK.pink, 0.26, 3.2, SCREEN_ANGLE.pink);
+    fillHalftone(c, 14, 71, w - 28, 13, INK.pink, 0.26, 3.2, INK_ANGLE.pink);
     c.restore();
     mottle(c, w, h, 141, 0.25);
   }, misregOffset(142));

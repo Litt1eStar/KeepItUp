@@ -5,7 +5,7 @@
  * own mottle, own misregistration) multiplied onto the paper. The top ~70 px stays quiet for HUD.
  */
 import { TUNING as T } from '../config/tuning';
-import { INK } from './palette';
+import { INK, INK_ANGLE as ANGLE } from './palette';
 import { fillHalftone, misregOffset, mottle, paperGrain } from './riso';
 import { MONO_FONT } from './type';
 import { font, inkLayer, knockOut, type Pt } from './draw';
@@ -17,12 +17,24 @@ const H = T.height;
 const F = T.floorY;
 const D = T.dangerLineY;
 
-/** Screen angles per ink, like real riso drums: they never moiré against each other much. */
-const ANGLE = { yellow: 0, pink: 75, blue: 15, black: 45 } as const;
-
-const SUN = { x: 700, y: 232, r: 160 };
+/** Top HUD band: no poster ink above this y (crop marks excepted). */
+export const STAGE_QUIET_Y = 72;
+/** Yellow sun disc. Its rim (r+6) and the blue offset ring (r+22, shifted up 10) stay below STAGE_QUIET_Y. */
+export const SUN = { x: 700, y: 258, r: 150 } as const;
+/** Topmost y reached by sun ink (yellow rim or blue offset ring). Pure, for tests. */
+export function sunTopY(): number {
+  return Math.min(SUN.y - SUN.r - 6 - 1, SUN.y - 10 - (SUN.r + 22) - 0.5);
+}
 /** Test strip box (paper window cut into the floor band, bottom-right). */
 const STRIP = { x: 732, y: F + 9, w: 214, h: 24 };
+
+/** Mottle only the rect that actually carries this ink (full-stage mottle ×4 costs seconds at RS=3). */
+function mottleRect(c: Ctx, x: number, y: number, w: number, h: number, seed: number, strength: number): void {
+  c.save();
+  c.translate(x, y);
+  mottle(c, w, h, seed, strength);
+  c.restore();
+}
 
 function zigzag(cy: number, amp: number, half: number): Pt[] {
   const top: Pt[] = [], bot: Pt[] = [];
@@ -47,7 +59,8 @@ function yellowInk(c: Ctx): void {
   c.lineWidth = 2;
   c.strokeStyle = INK.yellow;
   c.stroke();
-  mottle(c, W, H, 21, 0.3);
+  const R = SUN.r + 8;
+  mottleRect(c, SUN.x - R, SUN.y - R, R * 2, R * 2, 21, 0.3);
 }
 
 function pinkInk(c: Ctx): void {
@@ -69,7 +82,8 @@ function pinkInk(c: Ctx): void {
   c.lineTo(W, D);
   c.stroke();
   c.restore();
-  mottle(c, W, H, 22, 0.25);
+  mottleRect(c, 0, 220, W, 160, 22, 0.25);
+  mottleRect(c, 0, D - 3, W, 6, 25, 0.25);
 }
 
 function blueInk(c: Ctx): void {
@@ -97,7 +111,7 @@ function blueInk(c: Ctx): void {
   c.arc(SUN.x + 14, SUN.y - 10, SUN.r + 22, 0, Math.PI * 2);
   c.stroke();
   c.restore();
-  mottle(c, W, H, 23, 0.3);
+  // no mottle: the dotted hairlines are already broken; mottling 960×540 would cost ~0.5 s
 }
 
 function cropMarks(c: Ctx): void {
@@ -171,7 +185,7 @@ function blackInk(c: Ctx): void {
   font(c, 6.5, MONO_FONT, 700);
   c.textBaseline = 'middle';
   c.fillText('KIU-01 · RISO PROOF', sx + 7 * (sw + 2) + 4, sy + sh / 2 + 0.5);
-  mottle(c, W, H, 24, 0.22);
+  mottleRect(c, 0, F, W, H - F, 24, 0.22);
 }
 
 /** Color swatches for the test strip, one per ink, drawn as separate overprinted passes. */

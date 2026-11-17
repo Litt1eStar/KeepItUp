@@ -4,16 +4,16 @@
  * Layers (separate textures so the runtime can multiply / misregister / boil them):
  *   fill  – flat body ink, mottled, halftone shading crescent, eye whites + back sticker knocked out
  *   line  – black hand-drawn outline + face + sticker outline (3 boil variants, no pupils)
- *   pupil – one shared black dot, placed per EYE_LAYOUT at runtime
+ *   pupil – one shared black dot, placed with pupilPos() at runtime
  *
  * Texture layout (all body layers): CHAR_TEX.w × CHAR_TEX.h logical px, body center at
- * (CHAR_TEX.cx, CHAR_TEX.cy). Padding CHAR_PAD on left/right/top, none at the bottom, so the
- * body touches the bottom edge: use origin (0.5, 1) exactly like the old player sprite.
- * Faces look toward +x; flip the images with the facing direction.
+ * (CHAR_TEX.cx, CHAR_TEX.cy). Padding CHAR_PAD on left/right/top, none at the bottom: the
+ * outline's lowest point touches the bottom edge, so use origin (0.5, 1) like the old player
+ * sprite. Draw the fill with offset charMisreg(id). Faces look toward +x; flip with facing.
  */
 import { PLAYERS, type PlayerId } from '../config/players';
 import { TUNING as T } from '../config/tuning';
-import { INK, PLAYER_INK } from './palette';
+import { INK, INK_ANGLE, PLAYER_INK } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { handLine, inkLayer, knockOut, strokeWobbly, traceShape, type Pt } from './draw';
 
@@ -22,8 +22,14 @@ type Ctx = CanvasRenderingContext2D;
 /** Body radius (logical px), from tuning. */
 export const CHAR_R = T.playerWidth / 2;
 export const CHAR_PAD = 4;
-/** Ink is drawn slightly inside the radius so the boiling outline never leaves the texture. */
-const BODY_R = CHAR_R - 2;
+/** Feature scale relative to the 56 px design size. */
+const K = CHAR_R / 28;
+export const OUTLINE_W = 2.4 * K;
+export const OUTLINE_AMP = 0.55 * K;
+/** Nominal body radius: outline center line; max outline extent (with wobble + half width) = CHAR_R. */
+export const BODY_R = CHAR_R - OUTLINE_W / 2 - OUTLINE_AMP;
+/** Eye outline stroke width. */
+export const EYE_LINE_W = 1.4 * K;
 export const CHAR_TEX = {
   w: CHAR_R * 2 + CHAR_PAD * 2,
   h: CHAR_R * 2 + CHAR_PAD,
@@ -33,8 +39,15 @@ export const CHAR_TEX = {
   originY: 1,
 } as const;
 
-/** Feature scale relative to the 56 px design size. */
-const K = CHAR_R / 28;
+/** Furthest extent of the body outline from the body center (pure; ≤ CHAR_R by construction). */
+export function charOutlineExtent(): number {
+  return BODY_R + OUTLINE_AMP + OUTLINE_W / 2;
+}
+
+/** Fixed fill-layer misregistration per character (runtime: offset the fill image by this). */
+export function charMisreg(id: PlayerId): { dx: number; dy: number } {
+  return misregOffset(40 + id);
+}
 
 export interface EyeLayout {
   /** Pupil rest centers relative to the body center (facing +x). */
@@ -42,78 +55,89 @@ export interface EyeLayout {
   /** Horizontal half-size of the eye white. */
   eyeRadius: number;
   pupilRadius: number;
-  /** Max pupil travel from rest (horizontal). */
+  /** Max pupil travel from rest (horizontal). Travel is an ellipse with maxPupilOffsetY. */
   maxPupilOffset: number;
   /** Max vertical pupil travel (narrow/lidded eyes allow less). */
   maxPupilOffsetY: number;
 }
 
 export const EYE_LAYOUT: Record<PlayerId, EyeLayout> = {
-  // PIK: sharp, narrow, slanted eyes → almost no vertical travel
-  0: { eyes: [{ x: 3 * K, y: -6 * K }, { x: 16 * K, y: -6 * K }], eyeRadius: 4.8 * K, pupilRadius: 2.1 * K, maxPupilOffset: 2.3 * K, maxPupilOffsetY: 0.5 * K },
+  // PIK: sharp, narrow, slanted eyes → small pupils, almost no vertical travel
+  0: { eyes: [{ x: 3 * K, y: -6 * K }, { x: 16 * K, y: -6 * K }], eyeRadius: 5.2 * K, pupilRadius: 1.7 * K, maxPupilOffset: 1.2 * K, maxPupilOffsetY: 0.25 * K },
   // BLOOP: big round eyes, free travel
-  1: { eyes: [{ x: 2 * K, y: -5 * K }, { x: 17 * K, y: -5 * K }], eyeRadius: 6.2 * K, pupilRadius: 3 * K, maxPupilOffset: 2.6 * K, maxPupilOffsetY: 2.6 * K },
-  // BRICK: heavy lids; pupils hang just under the lid
-  2: { eyes: [{ x: 3 * K, y: -2.4 * K }, { x: 17 * K, y: -2.4 * K }], eyeRadius: 5.2 * K, pupilRadius: 2.3 * K, maxPupilOffset: 2.2 * K, maxPupilOffsetY: 0.4 * K },
+  1: { eyes: [{ x: 2 * K, y: -5 * K }, { x: 17 * K, y: -5 * K }], eyeRadius: 6.2 * K, pupilRadius: 2.9 * K, maxPupilOffset: 2.5 * K, maxPupilOffsetY: 2.5 * K },
+  // BRICK: heavy lids; small pupils sit just under the lid
+  2: { eyes: [{ x: 3 * K, y: -2.4 * K }, { x: 17 * K, y: -2.4 * K }], eyeRadius: 5.6 * K, pupilRadius: 1.8 * K, maxPupilOffset: 1.4 * K, maxPupilOffsetY: 0.15 * K },
 };
 
-/** Shared pupil texture: radius PUPIL_TEX_R, centered in a PUPIL_TEX_SIZE square. Scale by pupilRadius / PUPIL_TEX_R. */
+/** Shared pupil texture: radius PUPIL_TEX_R, centered in a PUPIL_TEX_SIZE square. */
 export const PUPIL_TEX_R = 3;
 export const PUPIL_TEX_SIZE = 8;
+
+/** Display scale for the pupil texture for character `id` (multiply by S at runtime). */
+export function pupilScale(id: PlayerId): number {
+  return EYE_LAYOUT[id].pupilRadius / PUPIL_TEX_R;
+}
+
+/**
+ * Pupil center for eye `eyeIndex` of character `id`, relative to the sprite origin (bottom-center;
+ * body center at (0, -CHAR_R)), looking along world direction (lookX, lookY). Eye positions are
+ * mirrored for facing = -1; travel is clamped to the eye's ellipse (zero look → rest position).
+ */
+export function pupilPos(id: PlayerId, eyeIndex: number, lookX: number, lookY: number, facing: 1 | -1): { x: number; y: number } {
+  const L = EYE_LAYOUT[id];
+  const e = L.eyes[eyeIndex];
+  const len = Math.hypot(lookX, lookY);
+  const ox = len > 1e-6 ? (lookX / len) * L.maxPupilOffset : 0;
+  const oy = len > 1e-6 ? (lookY / len) * L.maxPupilOffsetY : 0;
+  return { x: facing * e.x + ox, y: -CHAR_R + e.y + oy };
+}
 
 /** Speed lines texture: streaks trail to the left; place with origin (1, 0.5) at the character's back. */
 export const SPEEDLINES_TEX = { w: 72, h: 40 } as const;
 
-const BRICK_EYE_DY = -1.6 * K; // BRICK eye-circle center relative to the pupil rest point
-const BRICK_LID = -0.1; // lid line at (circle center + LID × eyeRadius)
+const BRICK_EYE_DY = -2.6 * K; // BRICK eye-circle center relative to the pupil rest point
+const BRICK_LID = -0.25; // lid stroke center at (circle center + LID × eyeRadius)
+const LID_W = 2.6 * K;
 
-/** Trace (beginPath) the eye-white shape for eye `i` of player `id`, body center at (cx,cy). */
-function traceEye(ctx: Ctx, id: PlayerId, i: number, cx: number, cy: number, seed = 0, amp = 0): void {
+/**
+ * Eye-white outline for eye `i` of `id`, relative to the body center (facing +x), unwobbled.
+ * Pure: the same polygon is knocked out of the fill, stroked on the line layer and used in tests.
+ * `smooth` = trace with curves (round eyes) instead of straight segments (sharp corners).
+ */
+export function eyeOutline(id: PlayerId, i: number): { pts: Pt[]; smooth: boolean } {
   const L = EYE_LAYOUT[id];
   const e = L.eyes[i];
-  const x = cx + e.x, y = cy + e.y;
   const er = L.eyeRadius;
-  let pts: Pt[];
   if (id === 0) {
     // almond with sharp corners, inner corner lower (mischievous slant)
     const tilt = i === 0 ? 0.3 : -0.3;
     const raw: Pt[] = [];
-    for (let s = 0; s <= 12; s++) {
-      const t = -1 + (s / 12) * 2;
-      raw.push([t * er, -(1 - t * t) * 2.8 * K]);
-    }
-    for (let s = 11; s >= 1; s--) {
-      const t = -1 + (s / 12) * 2;
-      raw.push([t * er, (1 - t * t) * 2.2 * K]);
-    }
+    for (let s = 0; s <= 12; s++) { const t = -1 + s / 6; raw.push([t * er, -(1 - t * t) * 3.6 * K]); }
+    for (let s = 11; s >= 1; s--) { const t = -1 + s / 6; raw.push([t * er, (1 - t * t) * 3.2 * K]); }
     const c = Math.cos(tilt), sn = Math.sin(tilt);
-    pts = raw.map(([px, py]) => [x + px * c - py * sn, y + px * sn + py * c]);
-    tracePathSharp(ctx, amp > 0 ? wobblePoints(pts, seed, amp) : pts);
-    return;
+    return { pts: raw.map(([px, py]) => [e.x + px * c - py * sn, e.y + px * sn + py * c]), smooth: false };
   }
-  if (id === 1) {
-    pts = circlePoints(x, y, er, 24);
-  } else {
-    // lower part of a circle under a flat heavy lid
-    const ox = x, oy = y + BRICK_EYE_DY;
-    const lidY = oy + BRICK_LID * er;
-    const a0 = Math.asin(BRICK_LID);
-    pts = [];
-    for (let s = 0; s <= 16; s++) {
-      const a = a0 + ((Math.PI - 2 * a0) * s) / 16; // from right lid corner round the bottom to left
-      pts.push([ox + Math.cos(a) * er, oy + Math.sin(a) * er]);
-    }
-    pts.push([ox, lidY]);
-    tracePathSharp(ctx, amp > 0 ? wobblePoints(pts, seed, amp) : pts);
-    return;
+  if (id === 1) return { pts: circlePoints(e.x, e.y, er, 32), smooth: true };
+  // BRICK: lower part of a circle; the white starts at the lid stroke's lower edge
+  const ox = e.x, oy = e.y + BRICK_EYE_DY;
+  const top = BRICK_LID * er + LID_W / 2; // relative to circle center
+  const a0 = Math.asin(top / er);
+  const pts: Pt[] = [];
+  for (let s = 0; s <= 20; s++) {
+    const a = a0 + ((Math.PI - 2 * a0) * s) / 20; // right lid corner, round the bottom, to the left
+    pts.push([ox + Math.cos(a) * er, oy + Math.sin(a) * er]);
   }
-  tracePath(ctx, amp > 0 ? wobblePoints(pts, seed, amp) : pts);
+  return { pts, smooth: false };
 }
 
-/** Straight-segment closed path (keeps sharp corners, e.g. almond eye tips). */
-function tracePathSharp(ctx: Ctx, pts: Pt[]): void {
+function traceEye(ctx: Ctx, id: PlayerId, i: number, cx: number, cy: number, seed = 0, amp = 0): void {
+  const { pts, smooth } = eyeOutline(id, i);
+  const moved: Pt[] = pts.map(([x, y]) => [cx + x, cy + y]);
+  const p = amp > 0 ? wobblePoints(moved, seed, amp) : moved;
+  if (smooth) { tracePath(ctx, p); return; }
   ctx.beginPath();
-  pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+  p.forEach(([x, y], k) => (k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
   ctx.closePath();
 }
 
@@ -122,20 +146,19 @@ const stickerAt = (cx: number, cy: number) => ({ x: cx - 0.6 * CHAR_R, y: cy + 0
 /** Fill layer: body ink with crescent shading, eye whites and back sticker knocked out (paper shows). */
 export function drawCharacterFill(ctx: Ctx, id: PlayerId, cx: number, cy: number, seed = 1): void {
   const ink = INK[PLAYER_INK[id]];
-  const body = () => { ctx.beginPath(); ctx.arc(cx, cy, BODY_R, 0, Math.PI * 2); };
+  const bodyPts = wobblePoints(circlePoints(cx, cy, BODY_R, 36), 900 + id, 0.4 * K);
   ctx.save();
-  body();
+  tracePath(ctx, bodyPts);
   ctx.fillStyle = ink;
   ctx.fill();
   // halftone crescent, light from top-left
   ctx.save();
-  body();
   ctx.clip();
   ctx.beginPath();
   ctx.rect(cx - CHAR_R * 2, cy - CHAR_R * 2, CHAR_R * 4, CHAR_R * 4);
   ctx.arc(cx - 0.26 * CHAR_R, cy - 0.3 * CHAR_R, CHAR_R * 1.02, 0, Math.PI * 2);
   ctx.clip('evenodd');
-  fillHalftone(ctx, cx - CHAR_R, cy - CHAR_R, CHAR_R * 2, CHAR_R * 2, INK.black, 0.26, 2.6 * K, 45);
+  fillHalftone(ctx, cx - CHAR_R, cy - CHAR_R, CHAR_R * 2, CHAR_R * 2, INK.black, 0.26, 2.6 * K, INK_ANGLE.black, { jitterSeed: 910 + id });
   ctx.restore();
   // knockouts
   for (let i = 0; i < EYE_LAYOUT[id].eyes.length; i++) knockOut(ctx, () => traceEye(ctx, id, i, cx, cy));
@@ -145,7 +168,7 @@ export function drawCharacterFill(ctx: Ctx, id: PlayerId, cx: number, cy: number
   ctx.translate(cx - CHAR_R, cy - CHAR_R);
   mottle(ctx, CHAR_R * 2, CHAR_R * 2, seed * 31 + id, 0.22);
   ctx.beginPath();
-  ctx.arc(CHAR_R, CHAR_R, CHAR_R + 1.5, 0, Math.PI * 2);
+  ctx.arc(CHAR_R, CHAR_R, CHAR_R - 0.5, 0, Math.PI * 2);
   ctx.arc(CHAR_R, CHAR_R, BODY_R - 2, 0, Math.PI * 2, true);
   ctx.clip();
   speckle(ctx, CHAR_R * 2, CHAR_R * 2, ink, seed * 17 + id, 14);
@@ -156,12 +179,16 @@ export function drawCharacterFill(ctx: Ctx, id: PlayerId, cx: number, cy: number
 export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number, v: number): void {
   const B = INK.black;
   const s = 100 + id * 10 + v; // seed per character × variant
-  strokeWobbly(ctx, circlePoints(cx, cy, BODY_R, 40), s, 0.55 * K, 2.4 * K, B);
+  // outline: wobbly, but the bottom 3 points are pinned at max extent so the feet touch the floor
+  const ring = wobblePoints(circlePoints(cx, cy, BODY_R, 40), s, OUTLINE_AMP);
+  const low = circlePoints(cx, cy, BODY_R + OUTLINE_AMP, 40);
+  for (const k of [9, 10, 11]) ring[k] = low[k];
+  strokeWobbly(ctx, ring, 0, 0, OUTLINE_W, B);
   // eyes
   for (let i = 0; i < EYE_LAYOUT[id].eyes.length; i++) {
     ctx.save();
-    traceEye(ctx, id, i, cx, cy, s * 3 + i, 0.25 * K);
-    ctx.lineWidth = 1.4 * K;
+    traceEye(ctx, id, i, cx, cy, s * 3 + i, 0.2 * K);
+    ctx.lineWidth = EYE_LINE_W;
     ctx.lineJoin = 'round';
     ctx.strokeStyle = B;
     ctx.stroke();
@@ -170,8 +197,8 @@ export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number
   const at = (pts: Pt[]): Pt[] => pts.map(([x, y]) => [cx + x * K, cy + y * K]);
   if (id === 0) {
     // sharp brows slanting toward the center + wide filled grin with a dimple
-    handLine(ctx, at([[-2, -12], [2, -11], [6.5, -9.5]]), s + 1, 1.8 * K, B, 0.25);
-    handLine(ctx, at([[12.5, -10], [17, -11.5], [21, -13]]), s + 2, 1.8 * K, B, 0.25);
+    handLine(ctx, at([[-2, -12.5], [2, -11.5], [6.5, -10]]), s + 1, 1.8 * K, B, 0.25);
+    handLine(ctx, at([[12.5, -10.5], [17, -12], [21, -13.5]]), s + 2, 1.8 * K, B, 0.25);
     ctx.save();
     tracePath(ctx, wobblePoints(at([[1, 4], [6, 5], [11, 5], [16, 4], [20, 2], [18, 7], [14, 11], [9, 12], [4, 9]]), s + 3, 0.3 * K));
     ctx.fillStyle = B;
@@ -195,10 +222,10 @@ export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number
     }
   } else {
     // heavy lids (thick flat line over each eye) + flat mouth
+    const er = EYE_LAYOUT[2].eyeRadius;
     for (const e of EYE_LAYOUT[2].eyes) {
-      const ly = e.y + BRICK_EYE_DY + BRICK_LID * EYE_LAYOUT[2].eyeRadius;
-      const er = EYE_LAYOUT[2].eyeRadius;
-      handLine(ctx, [[cx + e.x - er - 1.2 * K, cy + ly + 0.3 * K], [cx + e.x, cy + ly], [cx + e.x + er + 1 * K, cy + ly - 0.2 * K]], s + Math.round(e.x), 2.6 * K, B, 0.2);
+      const ly = cy + e.y + BRICK_EYE_DY + BRICK_LID * er;
+      handLine(ctx, [[cx + e.x - er - 1.2 * K, ly + 0.3 * K], [cx + e.x, ly], [cx + e.x + er + 1 * K, ly - 0.2 * K]], s + Math.round(e.x), LID_W, B, 0.2);
     }
     handLine(ctx, at([[4.5, 9], [10, 9.2], [15.5, 8.8]]), s + 5, 2 * K, B, 0.25);
   }
@@ -231,31 +258,32 @@ export function drawSpeedlines(ctx: Ctx, seed = 5): void {
   ctx.fillStyle = INK.black;
   for (const ry of rows) {
     const y = h * ry + (rnd() - 0.5) * 2;
-    const x1 = w - 2 - rnd() * 10;
-    const len = 22 + rnd() * (w - 30);
     const th = 1.2 + rnd() * 1.4;
-    const x0 = x1 - len;
+    const x1 = w - 2 - th / 2 - rnd() * 10;
+    const x0 = x1 - (22 + rnd() * (x1 - 22 - 16)); // tail never further left than x = 16
     ctx.beginPath();
     ctx.moveTo(x0, y);
     ctx.quadraticCurveTo((x0 + x1) / 2, y - th * 0.55, x1, y - th / 2);
     ctx.arc(x1, y, th / 2, -Math.PI / 2, Math.PI / 2);
     ctx.quadraticCurveTo((x0 + x1) / 2, y + th * 0.55, x0, y);
     ctx.fill();
-    // a broken fleck further back on some rows
-    if (rnd() < 0.6) ctx.fillRect(x0 - 4 - rnd() * 8, y - 0.5, 2 + rnd() * 3, 1);
+    // a broken fleck further back on some rows (stays ≥ 2 px inside the left edge)
+    if (rnd() < 0.6) ctx.fillRect(x0 - 4 - rnd() * 8, y - 0.5, 2 + rnd() * 2, 1);
   }
   ctx.restore();
 }
 
 /**
  * Full character composite on paper (ticket illustrations etc.): fill multiplied with its
- * misregistration, then line variant `v`, then pupils at rest glancing forward.
+ * misregistration, then line variant `v`, then pupils glancing forward.
  * Draws at the ctx's current transform; body center at (cx,cy).
  */
 export function drawCharacter(ctx: Ctx, id: PlayerId, cx: number, cy: number, v = 0): void {
   const span = CHAR_R + CHAR_PAD;
-  inkLayer(ctx, cx - span, cy - span, span * 2, span * 2, (c) => drawCharacterFill(c, id, cx, cy), misregOffset(40 + id));
+  inkLayer(ctx, cx - span, cy - span, span * 2, span * 2, (c) => drawCharacterFill(c, id, cx, cy), charMisreg(id));
   drawCharacterLine(ctx, id, cx, cy, v);
-  const L = EYE_LAYOUT[id];
-  for (const e of L.eyes) drawPupil(ctx, cx + e.x + L.maxPupilOffset * 0.5, cy + e.y, L.pupilRadius);
+  for (let i = 0; i < EYE_LAYOUT[id].eyes.length; i++) {
+    const p = pupilPos(id, i, 1, 0, 1);
+    drawPupil(ctx, cx + p.x, cy + CHAR_R + p.y, EYE_LAYOUT[id].pupilRadius);
+  }
 }

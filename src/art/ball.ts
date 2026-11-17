@@ -5,12 +5,13 @@
  *   fill   – flat ink disc, mottled, halftone crescent, player shape knocked out (+ thin black
  *            keyline around the knockout so it reads on yellow). Texture ballArt(r).size square.
  *   line   – black wobbly ring + spin mark (3 boil variants, shared by all balls). Same size.
- *   shadow – halftone floor shadow, 8 steps from high (sparse, tiny dots) to landing (dense).
- * All ball textures are centered: use origin (0.5, 0.5).
+ *   shadow – halftone floor shadow, 8 steps from high (sparse, tiny dots) to landing (dense);
+ *            pick the step with shadowStep().
+ * All ball textures are centered: use origin (0.5, 0.5). Offset the fill by ballMisreg(id).
  */
 import { PLAYERS, type PlayerId } from '../config/players';
-import { INK, PLAYER_INK } from './palette';
-import { circlePoints, fillHalftone, halftoneDots, mottle, speckle } from './riso';
+import { INK, INK_ANGLE, PLAYER_INK } from './palette';
+import { circlePoints, fillHalftone, halftoneDots, jitterDots, misregOffset, mottle, speckle, tracePath, wobblePoints } from './riso';
 import { knockOut, strokeWobbly, traceShape } from './draw';
 
 type Ctx = CanvasRenderingContext2D;
@@ -34,7 +35,31 @@ export function ballArt(r: number) {
     shadowW: r * 2,
     shadowH: r * 0.35,
     shadowCell: Math.max(2.2, r * 0.085),
+    /** Wobble amplitude of the outline ring and the ink disc edge. */
+    lineAmp: Math.max(0.5, r * 0.014),
+    fillAmp: Math.max(0.4, r * 0.01),
   };
+}
+
+/** Furthest extent of the line ring from the center (pure; ≤ size/2 so it never clips). */
+export function ballLineExtent(r: number): number {
+  const a = ballArt(r);
+  return r - a.ring / 2 + a.lineAmp + a.ring / 2;
+}
+
+/** Fixed fill-layer misregistration per ball (runtime: offset the fill image by this). */
+export function ballMisreg(id: PlayerId): { dx: number; dy: number } {
+  return misregOffset(200 + id);
+}
+
+/**
+ * Shadow step for a ball whose bottom is `heightAboveFloor` px above the floor:
+ * at/below the floor → SHADOW_STEPS-1 (dense), at/above `maxHeight` → 0 (sparse). Pure, clamped.
+ */
+export function shadowStep(heightAboveFloor: number, maxHeight: number): number {
+  if (!(maxHeight > 0)) return SHADOW_STEPS - 1;
+  const t = 1 - Math.min(1, Math.max(0, heightAboveFloor / maxHeight));
+  return Math.min(SHADOW_STEPS - 1, Math.floor(t * SHADOW_STEPS));
 }
 
 /** Shadow halftone density for step n (0 = ball high, SHADOW_STEPS-1 = about to land). Monotonic. */
@@ -57,8 +82,7 @@ export function drawBallFill(ctx: Ctx, id: PlayerId, r: number, seed = 1): void 
   const shape = PLAYERS[id].shape;
   const sy = c + (shape === 'triangle' ? r * 0.08 : 0);
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(c, c, a.inkR, 0, Math.PI * 2);
+  tracePath(ctx, wobblePoints(circlePoints(c, c, a.inkR - a.fillAmp, 36), 950 + id, a.fillAmp));
   ctx.fillStyle = ink;
   ctx.fill();
   // halftone crescent, lower-right (light from top-left)
@@ -68,7 +92,7 @@ export function drawBallFill(ctx: Ctx, id: PlayerId, r: number, seed = 1): void 
   ctx.rect(0, 0, a.size, a.size);
   ctx.arc(c - r * 0.24, c - r * 0.28, r * 1.0, 0, Math.PI * 2);
   ctx.clip('evenodd');
-  fillHalftone(ctx, c - r, c - r, r * 2, r * 2, INK.black, 0.24, a.cell, 45);
+  fillHalftone(ctx, c - r, c - r, r * 2, r * 2, INK.black, 0.24, a.cell, INK_ANGLE.black, { jitterSeed: 960 + id });
   ctx.restore();
   // shape knockout + keyline
   knockOut(ctx, () => traceShape(ctx, shape, c, sy, a.shapeSize));
@@ -92,7 +116,7 @@ export function drawBallLine(ctx: Ctx, r: number, v: number): void {
   const a = ballArt(r);
   const c = a.size / 2;
   const s = 300 + v;
-  strokeWobbly(ctx, circlePoints(c, c, r - a.ring / 2, 44), s, Math.max(0.5, r * 0.014), a.ring, INK.black);
+  strokeWobbly(ctx, circlePoints(c, c, r - a.ring / 2, 44), s, a.lineAmp, a.ring, INK.black);
   // spin mark: short arc + a trailing dot, asymmetric so rotation reads
   ctx.save();
   ctx.strokeStyle = INK.black;
@@ -111,14 +135,14 @@ export function drawBallLine(ctx: Ctx, r: number, v: number): void {
 }
 
 /** Halftone floor shadow step n in `color`, centered in shadowTexSize(r). */
-export function drawShadow(ctx: Ctx, r: number, n: number, color: string, angle = 45): void {
+export function drawShadow(ctx: Ctx, r: number, n: number, color: string, angle = INK_ANGLE.black): void {
   const a = ballArt(r);
   const { w, h } = shadowTexSize(r);
   const t = n / (SHADOW_STEPS - 1);
   const cell = a.shadowCell * (1.15 - 0.3 * t); // tighter grid as the ball drops
   const rx = a.shadowW / 2, ry = a.shadowH / 2;
   const cx = w / 2, cy = h / 2;
-  const dots = halftoneDots(w, h, shadowDensity(n), cell, angle);
+  const dots = jitterDots(halftoneDots(w, h, shadowDensity(n), cell, angle), 970 + n);
   ctx.save();
   ctx.fillStyle = color;
   ctx.beginPath();

@@ -9,7 +9,7 @@ import type Phaser from 'phaser';
 import { PLAYERS, type PlayerId } from '../config/players';
 import { RS } from '../config/render';
 import { TUNING as T } from '../config/tuning';
-import { INK } from './palette';
+import { INK, INK_ANGLE } from './palette';
 import { CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
 import { SHADOW_STEPS, ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
 import { drawStage } from './stage';
@@ -37,6 +37,26 @@ export const RISO_KEYS = {
   dot: 'riso:dot',
   dotEmpty: 'riso:dotEmpty',
 } as const;
+
+const IDS: PlayerId[] = [0, 1, 2];
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+/** Every riso texture key generateRisoTextures registers (pure; for tests and preloading checks). */
+export function allRisoKeys(): string[] {
+  const K = RISO_KEYS;
+  return [
+    K.bg, K.pupil, K.speedlines, K.receipt, K.dot, K.dotEmpty,
+    ...IDS.map(K.charFill),
+    ...IDS.flatMap((id) => range(BOIL_VARIANTS).map((v) => K.charLine(id, v))),
+    ...IDS.map(K.ballFill),
+    ...range(BOIL_VARIANTS).map(K.ballLine),
+    ...range(SHADOW_STEPS).map(K.shadow),
+    ...range(SHADOW_STEPS).map(K.shadowDanger),
+    ...STAMP_IDS.map(K.stamp),
+    ...range(BOIL_VARIANTS).map(K.splat),
+    ...IDS.map(K.ticket),
+  ];
+}
 
 /** Create a canvas texture of logical size w×h drawn at RS× resolution (ctx pre-scaled). */
 function canvasTexture(scene: Phaser.Scene, key: string, w: number, h: number, draw: (ctx: Ctx) => void): void {
@@ -71,8 +91,8 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
   for (let v = 0; v < BOIL_VARIANTS; v++) tex(K.ballLine(v), ball.size, ball.size, (c) => drawBallLine(c, r, v));
   const sh = shadowTexSize(r);
   for (let n = 0; n < SHADOW_STEPS; n++) {
-    tex(K.shadow(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.black, 45));
-    tex(K.shadowDanger(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.pink, 75));
+    tex(K.shadow(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.black, INK_ANGLE.black));
+    tex(K.shadowDanger(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.pink, INK_ANGLE.pink));
   }
 
   const measure = document.createElement('canvas').getContext('2d')!;

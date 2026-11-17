@@ -26,6 +26,26 @@ export interface HalftoneOpts {
   bleed?: boolean;
   /** Grid anchor in the rect's LOCAL coords (default: rect center). Share it across fills to align the same ink. */
   origin?: { x: number; y: number };
+  /**
+   * Draw-time dot gain (fillHalftone/drawn dots only; halftoneDots' output is unaffected):
+   * seeded ±10% radius and ±0.2 px position jitter. Default on in fillHalftone; pass false to disable.
+   */
+  jitter?: boolean;
+  /** Seed for the jitter (default 1). */
+  jitterSeed?: number;
+}
+
+/** Deterministically jitter dots like real dot gain: ±10% radius, ±0.2 px position. */
+export function jitterDots(
+  dots: { x: number; y: number; r: number }[],
+  seed: number,
+): { x: number; y: number; r: number }[] {
+  const rnd = seeded(seed * 4099 + 7);
+  return dots.map((d) => ({
+    x: d.x + (rnd() * 2 - 1) * 0.2,
+    y: d.y + (rnd() * 2 - 1) * 0.2,
+    r: d.r * (1 + (rnd() * 2 - 1) * 0.1),
+  }));
 }
 
 /**
@@ -148,8 +168,9 @@ export function fillHalftone(
   angleDeg = 15,
   opts: HalftoneOpts = {},
 ): void {
-  const dots = halftoneDots(w, h, density, cell, angleDeg, { bleed: true, ...opts });
-  if (dots.length === 0) return;
+  const raw = halftoneDots(w, h, density, cell, angleDeg, { bleed: true, ...opts });
+  if (raw.length === 0) return;
+  const dots = opts.jitter === false ? raw : jitterDots(raw, opts.jitterSeed ?? 1);
   ctx.save();
   ctx.fillStyle = color;
   ctx.beginPath();
