@@ -1,6 +1,7 @@
 /**
  * Riso UI pieces: rubber stamps and ink splats (drawn in WHITE so the runtime tints them with
- * setTint(INK_HEX.x)), player ticket stubs, the high-score receipt and the next-ball dots.
+ * setTint(INK_HEX.x)), black splat keylines (layered on yellow splats), player ticket stubs, the high-score receipt
+ * and the next-ball dots.
  * No Phaser import; all sizes logical.
  */
 import { PLAYERS, type PlayerId } from '../config/players';
@@ -84,8 +85,11 @@ export function splatMaxExtent(): number {
   return Math.max(SPLAT_R * SPIKE_MAX, SPLAT_R * DROP_DIST_MAX + DROP_R_MAX * 1.15);
 }
 
-/** Ink splat in white: lumpy main blot + a few droplets, variant v. */
-export function drawSplat(ctx: Ctx, v: number): void {
+/** Keyline width of `riso:splatLine:{v}`. */
+export const SPLAT_LINE_W = 1.2;
+
+/** Splat outlines for variant v (pure, deterministic): the lumpy main blot, then each droplet. */
+export function splatShapes(v: number): Pt[][] {
   const rnd = seeded(500 + v * 11);
   const c = SPLAT_SIZE / 2, R = SPLAT_R;
   const pts: Pt[] = [];
@@ -95,14 +99,35 @@ export function drawSplat(ctx: Ctx, v: number): void {
     const rr = R * (spikes.has(i) ? SPIKE_MAX - 0.25 + rnd() * 0.25 : 0.82 + rnd() * 0.3);
     pts.push([c + Math.cos(a) * rr, c + Math.sin(a) * rr]);
   }
-  ctx.save();
-  ctx.fillStyle = '#fff';
-  tracePath(ctx, pts);
-  ctx.fill();
+  const shapes = [pts];
   const drops = 2 + Math.floor(rnd() * 2);
   for (let i = 0; i < drops; i++) {
     const a = rnd() * Math.PI * 2, d = R * (DROP_DIST_MAX - 0.35 + rnd() * 0.35), r = 1.8 + rnd() * (DROP_R_MAX - 1.8);
-    tracePath(ctx, wobblePoints(circlePoints(c + Math.cos(a) * d, c + Math.sin(a) * d, r, 10), v * 7 + i, r * 0.15));
+    shapes.push(wobblePoints(circlePoints(c + Math.cos(a) * d, c + Math.sin(a) * d, r, 10), v * 7 + i, r * 0.15));
+  }
+  return shapes;
+}
+
+/** Max distance from the splat center reached by the keyline stroke (pure; ≤ SPLAT_SIZE/2). */
+export function splatLineExtent(): number {
+  return splatMaxExtent() + SPLAT_LINE_W / 2;
+}
+
+/**
+ * Whether the runtime should layer `riso:splatLine:{v}` on a splat of this tint. Only yellow:
+ * pale yellow on paper needs a black keyline to read; pink/blue splats stay flat (a keyline
+ * would make them heavy and cartoony).
+ */
+export function splatNeedsKeyline(tint: number): boolean {
+  return tint === INK_HEX.yellow;
+}
+
+/** Ink splat in white: lumpy main blot + a few droplets, variant v. */
+export function drawSplat(ctx: Ctx, v: number): void {
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  for (const s of splatShapes(v)) {
+    tracePath(ctx, s);
     ctx.fill();
   }
   ctx.restore();
@@ -112,6 +137,24 @@ export function drawSplat(ctx: Ctx, v: number): void {
   ctx.translate(4, 4);
   speckle(ctx, SPLAT_SIZE - 8, SPLAT_SIZE - 8, '#fff', 530 + v, 6);
   ctx.restore();
+}
+
+/**
+ * Black keyline for splat variant v (same SPLAT_SIZE texture, same outlines as drawSplat, NOT tinted).
+ * Layer it on top of the tinted splat (MULTIPLY) when splatNeedsKeyline(tint), with the same variant.
+ */
+export function drawSplatLine(ctx: Ctx, v: number): void {
+  ctx.save();
+  ctx.strokeStyle = INK.black;
+  ctx.lineWidth = SPLAT_LINE_W;
+  ctx.lineJoin = 'round';
+  for (const s of splatShapes(v)) {
+    tracePath(ctx, s);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // broken like a worn print, so it stays a keyline rather than a cartoon outline
+  mottle(ctx, SPLAT_SIZE, SPLAT_SIZE, 540 + v, 0.35);
 }
 
 // ---------------------------------------------------------------- ticket
@@ -329,8 +372,11 @@ export function drawDot(ctx: Ctx, filled: boolean, seed = 0): void {
 
 // ---------------------------------------------------------------- stamp inks
 
-/** Default ink (INK_HEX tint) for each stamp when used at runtime. Yellow is faint on paper: back it with a darker ink. */
+/** Inks a text stamp may use. Never yellow: yellow type is too faint on paper. */
+export const STAMP_INKS_ALLOWED: readonly number[] = [INK_HEX.pink, INK_HEX.blue, INK_HEX.black];
+
+/** Default ink (INK_HEX tint) for each stamp when used at runtime: pink, blue or black only. */
 export const STAMP_INK: Record<StampId, number> = {
-  NICE: INK_HEX.blue, PASS: INK_HEX.pink, WRONG: INK_HEX.pink, PLUS_BALL: INK_HEX.yellow,
+  NICE: INK_HEX.blue, PASS: INK_HEX.pink, WRONG: INK_HEX.pink, PLUS_BALL: INK_HEX.blue,
   COMBO: INK_HEX.pink, DROPPED: INK_HEX.black, JOINED: INK_HEX.blue,
 };

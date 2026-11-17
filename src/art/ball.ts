@@ -4,7 +4,8 @@
  *
  *   fill   – flat ink disc, mottled, halftone crescent, player shape knocked out (+ thin black
  *            keyline around the knockout so it reads on yellow). Texture ballArt(r).size square.
- *   line   – black wobbly ring + spin mark (3 boil variants, shared by all balls). Same size.
+ *   line   – black wobbly ring + two straight spin ticks (3 boil variants, shared by all balls).
+ *            No dots/curves inside the ring: balls must never read as faces. Same size.
  *   shadow – halftone floor shadow, 8 steps from high (sparse, tiny dots) to landing (dense);
  *            pick the step with shadowStep().
  * All ball textures are centered: use origin (0.5, 0.5). Offset the fill by ballMisreg(id).
@@ -111,26 +112,39 @@ export function drawBallFill(ctx: Ctx, id: PlayerId, r: number, seed = 1): void 
   ctx.restore();
 }
 
-/** Line layer (shared by all balls): wobbly black ring + spin mark at the upper-left. */
+/**
+ * Spin-mark ticks (pure): two short STRAIGHT parallel strokes near the rim on the upper-left only,
+ * tangent to the ring (a cartoon glint/seam). Deliberately no dots and no curves, so a ball never
+ * reads as a face. Returns [x1,y1,x2,y2] segments in texture coords for boil variant v.
+ */
+export function ballSpinTicks(r: number, v: number): [number, number, number, number][] {
+  const a = ballArt(r);
+  const c = a.size / 2;
+  const ang = -2.36 + (v - 1) * 0.035; // upper-left, nudged per boil variant
+  const ux = Math.cos(ang), uy = Math.sin(ang); // radial unit
+  const tx = -uy, ty = ux; // tangent unit
+  return [
+    { rad: r * 0.78, len: r * 0.36 },
+    { rad: r * 0.6, len: r * 0.2 },
+  ].map(({ rad, len }) => {
+    const mx = c + ux * rad, my = c + uy * rad;
+    return [mx - (tx * len) / 2, my - (ty * len) / 2, mx + (tx * len) / 2, my + (ty * len) / 2];
+  });
+}
+
+/** Line layer (shared by all balls): wobbly black ring + straight spin ticks at the upper-left. */
 export function drawBallLine(ctx: Ctx, r: number, v: number): void {
   const a = ballArt(r);
   const c = a.size / 2;
   const s = 300 + v;
   strokeWobbly(ctx, circlePoints(c, c, r - a.ring / 2, 44), s, a.lineAmp, a.ring, INK.black);
-  // spin mark: short arc + a trailing dot, asymmetric so rotation reads
   ctx.save();
   ctx.strokeStyle = INK.black;
-  ctx.fillStyle = INK.black;
-  ctx.lineCap = 'round';
-  ctx.lineWidth = a.ring * 0.85;
-  const sr = r * 0.72;
-  const j = (v - 1) * 0.04;
+  ctx.lineCap = 'butt'; // square-ish ends: round caps on short ticks start to look like dots
+  ctx.lineWidth = a.ring * 0.8;
   ctx.beginPath();
-  ctx.arc(c, c, sr, -2.55 + j, -1.95 + j);
+  for (const [x1, y1, x2, y2] of ballSpinTicks(r, v)) { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
   ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(c + Math.cos(-1.68) * sr, c + Math.sin(-1.68) * sr, a.ring * 0.55, 0, Math.PI * 2);
-  ctx.fill();
   ctx.restore();
 }
 

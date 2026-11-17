@@ -3,9 +3,9 @@ import {
   BODY_R, CHAR_R, CHAR_TEX, EYE_LAYOUT, EYE_LINE_W, OUTLINE_W, PUPIL_TEX_R,
   charMisreg, charOutlineExtent, eyeOutline, pupilPos, pupilScale,
 } from '../src/art/characters';
-import { SHADOW_STEPS, ballArt, ballLineExtent, ballMisreg, shadowDensity, shadowStep, shadowTexSize } from '../src/art/ball';
-import { SPLAT_SIZE, STAMP_IDS, STAMP_TEXT, formatRank, formatScore, splatMaxExtent } from '../src/art/ui';
-import { STAGE_QUIET_Y, sunTopY } from '../src/art/stage';
+import { SHADOW_STEPS, ballArt, ballLineExtent, ballMisreg, ballSpinTicks, shadowDensity, shadowStep, shadowTexSize } from '../src/art/ball';
+import { SPLAT_SIZE, STAMP_IDS, STAMP_TEXT, formatRank, formatScore, splatLineExtent, splatMaxExtent, splatShapes } from '../src/art/ui';
+import { PLAY_FIELD, STAGE_QUIET_Y, stageInkCoverage, sunTopY } from '../src/art/stage';
 import { polygonClearance, shapePoints, type Pt } from '../src/art/draw';
 import { jitterDots, halftoneDots } from '../src/art/riso';
 import { INK_ANGLE } from '../src/art/palette';
@@ -114,6 +114,28 @@ describe('ball art', () => {
       expect(s.h).toBeGreaterThanOrEqual(a.shadowH);
     }
   });
+  it('spin mark is two straight ticks on the upper-left only (never a face)', () => {
+    for (const r of [20, 44, 70]) {
+      const a = ballArt(r);
+      const c = a.size / 2;
+      for (let v = 0; v < BOIL_VARIANTS; v++) {
+        const ticks = ballSpinTicks(r, v);
+        expect(ticks).toHaveLength(2);
+        for (const [x1, y1, x2, y2] of ticks) {
+          for (const [x, y] of [[x1, y1], [x2, y2]]) {
+            expect(x).toBeLessThan(c); // left half
+            expect(y).toBeLessThan(c); // top half: nothing below the shape that could read as a mouth
+            const d = Math.hypot(x - c, y - c);
+            expect(d).toBeGreaterThan(a.shapeSize * 1.2); // clear of the player-shape knockout
+            expect(d).toBeLessThan(r - a.ring); // inside the ring
+          }
+        }
+        // parallel (same direction)
+        const dir = ticks.map(([x1, y1, x2, y2]) => Math.atan2(y2 - y1, x2 - x1));
+        expect(dir[0]).toBeCloseTo(dir[1], 6);
+      }
+    }
+  });
 });
 
 describe('ui + stage', () => {
@@ -130,9 +152,42 @@ describe('ui + stage', () => {
   });
   it('splat ink stays inside its texture', () => {
     expect(splatMaxExtent()).toBeLessThanOrEqual(SPLAT_SIZE / 2);
+    expect(splatLineExtent()).toBeLessThanOrEqual(SPLAT_SIZE / 2);
+  });
+  it('splat keyline traces the same outlines as the fill, per variant', () => {
+    for (let v = 0; v < BOIL_VARIANTS; v++) {
+      const a = splatShapes(v);
+      expect(a).toEqual(splatShapes(v));
+      expect(a.length).toBeGreaterThanOrEqual(3); // blot + 2..3 drops
+      for (const s of a) for (const [x, y] of s) expect(Math.hypot(x - SPLAT_SIZE / 2, y - SPLAT_SIZE / 2)).toBeLessThanOrEqual(splatMaxExtent());
+    }
+    expect(splatShapes(0)).not.toEqual(splatShapes(1));
   });
   it('the sun keeps the HUD band quiet', () => {
     expect(sunTopY()).toBeGreaterThanOrEqual(STAGE_QUIET_Y);
+  });
+  it('play field stays calm: each decorative ink covers ≤ 12% of it', () => {
+    expect(PLAY_FIELD.y).toBe(STAGE_QUIET_Y);
+    expect(PLAY_FIELD.y + PLAY_FIELD.h).toBe(TUNING.floorY);
+    const cov = stageInkCoverage();
+    for (const ink of ['pink', 'blue', 'yellow', 'black'] as const) {
+      expect(cov[ink]).toBeGreaterThanOrEqual(0);
+      expect(cov[ink]).toBeLessThanOrEqual(0.12);
+    }
+    // not a blank page: the poster shapes are still there
+    expect(cov.yellow + cov.pink + cov.blue).toBeGreaterThan(0.005);
+  });
+  it('no ball-sized patch of the play field is busy (≤ 12% per ink in any 120 px window)', () => {
+    for (let y = PLAY_FIELD.y; y + 120 <= PLAY_FIELD.y + PLAY_FIELD.h; y += 20) {
+      for (let x = 0; x + 120 <= PLAY_FIELD.w; x += 40) {
+        const cov = stageInkCoverage({ x, y, w: 120, h: 120 });
+        for (const v of Object.values(cov)) expect(v).toBeLessThanOrEqual(0.12);
+      }
+    }
+  });
+  it('coverage measures what is there (a window over the sun sees yellow)', () => {
+    expect(stageInkCoverage({ x: 780, y: 420, w: 120, h: 80 }).yellow).toBeGreaterThan(0.03);
+    expect(stageInkCoverage({ x: 300, y: 100, w: 120, h: 120 }).yellow).toBe(0);
   });
 });
 
@@ -157,9 +212,10 @@ describe('shapes, halftone jitter, keys', () => {
   });
   it('enumerates every riso key once, all prefixed', () => {
     const keys = allRisoKeys();
-    const expected = 6 + 3 + 3 * BOIL_VARIANTS + 3 + BOIL_VARIANTS + 2 * SHADOW_STEPS + STAMP_IDS.length + BOIL_VARIANTS + 3;
+    const expected = 6 + 3 + 3 * BOIL_VARIANTS + 3 + BOIL_VARIANTS + 2 * SHADOW_STEPS + STAMP_IDS.length + 2 * BOIL_VARIANTS + 3;
     expect(keys).toHaveLength(expected);
-    expect(expected).toBe(53);
+    expect(expected).toBe(56);
+    for (let v = 0; v < BOIL_VARIANTS; v++) expect(keys).toContain(RISO_KEYS.splatLine(v));
     for (const k of keys) expect(k.startsWith('riso:')).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys).toContain(RISO_KEYS.stamp('PLUS_BALL'));

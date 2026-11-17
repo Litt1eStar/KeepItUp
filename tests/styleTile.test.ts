@@ -6,7 +6,8 @@ import {
 import { INK_CYCLE_MS, ballInkAt, demoBallPos, demoWrongHit, dotsFilledAt, periodIndex } from '../src/art/styleTileMotion';
 import { SHADOW_STEPS } from '../src/art/ball';
 import { allRisoKeys } from '../src/art/textures';
-import { STAMP_IDS, STAMP_INK } from '../src/art/ui';
+import { STAMP_IDS, STAMP_INK, STAMP_INKS_ALLOWED, splatNeedsKeyline } from '../src/art/ui';
+import { INK_HEX } from '../src/art/palette';
 import { TUNING as T } from '../src/config/tuning';
 import { STAGE_QUIET_Y } from '../src/art/stage';
 
@@ -111,5 +112,17 @@ describe('style tile demo schedules', () => {
 describe('stamp inks', () => {
   it('every stamp has an ink', () => {
     for (const id of STAMP_IDS) expect(typeof STAMP_INK[id]).toBe('number');
+  });
+  it('no text stamp is yellow (too faint on paper): pink, blue or black only', () => {
+    expect(STAMP_INKS_ALLOWED).not.toContain(INK_HEX.yellow);
+    for (const id of STAMP_IDS) {
+      expect(STAMP_INK[id]).not.toBe(INK_HEX.yellow);
+      expect(STAMP_INKS_ALLOWED).toContain(STAMP_INK[id]);
+    }
+  });
+  it('yellow splats get the black keyline, pink/blue do not', () => {
+    expect(splatNeedsKeyline(INK_HEX.yellow)).toBe(true);
+    expect(splatNeedsKeyline(INK_HEX.pink)).toBe(false);
+    expect(splatNeedsKeyline(INK_HEX.blue)).toBe(false);
   });
 });

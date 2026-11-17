@@ -4,7 +4,7 @@ import { PLAYERS } from '../../config/players';
 import { INK, INK_HEX, PLAYER_INK } from '../../art/palette';
 import { risoText } from '../../art/type';
 import { RISO_KEYS } from '../../art/textures';
-import { STAMP_IDS, STAMP_INK, TICKET } from '../../art/ui';
+import { STAMP_IDS, STAMP_INK, TICKET, splatNeedsKeyline } from '../../art/ui';
 import { boilVariant } from '../../art/motion';
 import { SLAM_PERIOD_MS, dotsFilledAt, periodIndex } from '../../art/styleTileMotion';
 import { StampSlam } from '../../art/views/StampSlam';
@@ -32,21 +32,27 @@ export function buildPage2(scene: Phaser.Scene): TilePage {
   const tx = (i: number) => 16 + i * (TICKET.w * TICKET_SCALE + 10);
   PLAYERS.forEach((p) => add(scene.add.image(tx(p.id), 102, RISO_KEYS.ticket(p.id)).setOrigin(0).setScale(S * TICKET_SCALE)));
   const joined = new StampSlam(scene, 'JOINED', INK_HEX[PLAYER_INK[1]], -0.2, 0.7);
-  joined.image.setPosition(tx(1) + 98, 102 + 76);
+  // over the illustration/name area (ticket-local ~(110, 50)), clear of the controls line at y 99
+  joined.image.setPosition(tx(1) + 110 * TICKET_SCALE, 102 + 50 * TICKET_SCALE);
   root.add(joined.image);
 
   // ---- splats
-  caption(scene, root, 540, 84, 'SPLATS');
-  const splats = PLAYERS.map((p, i) =>
-    add(scene.add.image(575 + i * 62, 140, RISO_KEYS.splat(i)).setScale(S * 1.0).setTint(INK_HEX[PLAYER_INK[p.id]]).setBlendMode(MULTIPLY)),
-  );
+  caption(scene, root, 540, 84, 'SPLATS (YELLOW + KEYLINE)');
+  const splats = PLAYERS.map((p, i) => {
+    const tint = INK_HEX[PLAYER_INK[p.id]];
+    const fill = add(scene.add.image(575 + i * 62, 140, RISO_KEYS.splat(i)).setScale(S).setTint(tint).setBlendMode(MULTIPLY));
+    const line = splatNeedsKeyline(tint)
+      ? add(scene.add.image(fill.x, fill.y, RISO_KEYS.splatLine(i)).setScale(S).setBlendMode(MULTIPLY))
+      : null;
+    return { fill, line };
+  });
 
   // ---- receipt
   caption(scene, root, 730, 84, 'RECEIPT');
   add(scene.add.image(730, 102, RISO_KEYS.receipt).setOrigin(0).setScale(S * 0.85));
 
   // ---- stamps
-  caption(scene, root, 16, 232, 'STAMPS (YELLOW SHOWN OVERPRINTED ON PINK)');
+  caption(scene, root, 16, 232, 'STAMPS (PINK · BLUE · BLACK ONLY)');
   const items = STAMP_IDS.map((id) => ({ id, w: scene.textures.get(RISO_KEYS.stamp(id)).getSourceImage().width * S }));
   const gap = 10;
   const total = items.reduce((a, b) => a + b.w, 0) + gap * (items.length - 1);
@@ -55,9 +61,6 @@ export function buildPage2(scene: Phaser.Scene): TilePage {
   items.forEach((it, i) => {
     const w = it.w * sc;
     const cx = x + w / 2;
-    if (STAMP_INK[it.id] === INK_HEX.yellow) {
-      add(scene.add.rectangle(cx, 280, w + 8, 46, INK_HEX.pink, 0.45).setBlendMode(MULTIPLY));
-    }
     add(
       scene.add.image(cx, 280, RISO_KEYS.stamp(it.id)).setScale(S * sc)
         .setTint(STAMP_INK[it.id]).setBlendMode(MULTIPLY).setRotation(((i * 37) % 11 - 5) * 0.012),
@@ -89,7 +92,10 @@ export function buildPage2(scene: Phaser.Scene): TilePage {
     const v = boilVariant(t);
     if (v !== lastBoil) {
       lastBoil = v;
-      splats.forEach((s, i) => s.setTexture(RISO_KEYS.splat((i + v) % 3)));
+      splats.forEach((s, i) => {
+        s.fill.setTexture(RISO_KEYS.splat((i + v) % 3));
+        s.line?.setTexture(RISO_KEYS.splatLine((i + v) % 3));
+      });
     }
   };
   return { root, update };

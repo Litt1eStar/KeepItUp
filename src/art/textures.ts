@@ -3,6 +3,7 @@
  * (display images with .setScale(S)). All keys are prefixed `riso:`; use RISO_KEYS, not strings.
  *
  * Origins: characters (fill/line) (0.5, 1) — see CHAR_TEX; pupil, balls, shadows, stamps, splats,
+ * splat keylines,
  * dots (0.5, 0.5); speedlines (1, 0.5) at the character's back; bg/ticket/receipt (0, 0).
  */
 import type Phaser from 'phaser';
@@ -13,7 +14,7 @@ import { INK, INK_ANGLE } from './palette';
 import { CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
 import { SHADOW_STEPS, ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
 import { drawStage } from './stage';
-import { DOT_TEX, RECEIPT, SPLAT_SIZE, STAMP_IDS, TICKET, drawDot, drawReceipt, drawSplat, drawStamp, drawTicket, stampSize, type StampId } from './ui';
+import { DOT_TEX, RECEIPT, SPLAT_SIZE, STAMP_IDS, TICKET, drawDot, drawReceipt, drawSplat, drawSplatLine, drawStamp, drawTicket, stampSize, type StampId } from './ui';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -32,6 +33,8 @@ export const RISO_KEYS = {
   shadowDanger: (n: number) => `riso:shadowDanger:${n}`,
   stamp: (id: StampId) => `riso:stamp:${id}`,
   splat: (v: number) => `riso:splat:${v}`,
+  /** Black keyline matching splat(v) (untinted). Layered on top when splatNeedsKeyline(tint), i.e. yellow. */
+  splatLine: (v: number) => `riso:splatLine:${v}`,
   ticket: (id: PlayerId) => `riso:ticket${id}`,
   receipt: 'riso:receipt',
   dot: 'riso:dot',
@@ -54,6 +57,7 @@ export function allRisoKeys(): string[] {
     ...range(SHADOW_STEPS).map(K.shadowDanger),
     ...STAMP_IDS.map(K.stamp),
     ...range(BOIL_VARIANTS).map(K.splat),
+    ...range(BOIL_VARIANTS).map(K.splatLine),
     ...IDS.map(K.ticket),
   ];
 }
@@ -100,7 +104,10 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
     const { w, h } = stampSize(measure, id);
     tex(K.stamp(id), w, h, (c) => drawStamp(c, id, w, h));
   }
-  for (let v = 0; v < BOIL_VARIANTS; v++) tex(K.splat(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplat(c, v));
+  for (let v = 0; v < BOIL_VARIANTS; v++) {
+    tex(K.splat(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplat(c, v));
+    tex(K.splatLine(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplatLine(c, v));
+  }
   for (const p of PLAYERS) tex(K.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
   tex(K.receipt, RECEIPT.w, RECEIPT.h, drawReceipt);
   tex(K.dot, DOT_TEX, DOT_TEX, (c) => drawDot(c, true));
