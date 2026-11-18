@@ -212,26 +212,51 @@ export function setPlayerKey(id: PlayerId, action: ControlAction, rawKey: string
   if (persist) saveKeys();
 }
 
-/** True when `style` is already selected by another player (excluding `excludeId`). */
-export function isCharStyleTaken(style: CharStyleId, excludeId?: PlayerId): boolean {
-  return PLAYERS.some((p) => p.id !== excludeId && p.charStyle === style);
+/**
+ * True when `style` is locked by another player. When `lockedIds` is provided (e.g. joined players
+ * in the Lobby), only players in `lockedIds` lock their character; unjoined slots can be swapped.
+ */
+export function isCharStyleTaken(
+  style: CharStyleId,
+  excludeId?: PlayerId,
+  lockedIds?: ReadonlySet<PlayerId>,
+): boolean {
+  return PLAYERS.some((p) => p.id !== excludeId && (!lockedIds || lockedIds.has(p.id)) && p.charStyle === style);
 }
 
-/** Assign a player's character style variant (0..5), rejecting duplicates already used by another player. */
-export function setPlayerCharStyle(id: PlayerId, style: CharStyleId): CharStyleId {
-  if (isCharStyleTaken(style, id)) return PLAYERS[id].charStyle;
-  PLAYERS[id].charStyle = style;
+/**
+ * Assign a player's character style variant (0..5). Rejects styles locked by `lockedIds`,
+ * and swaps with any unlocked player who currently holds that style.
+ */
+export function setPlayerCharStyle(
+  id: PlayerId,
+  style: CharStyleId,
+  lockedIds?: ReadonlySet<PlayerId>,
+): CharStyleId {
+  if (isCharStyleTaken(style, id, lockedIds)) return PLAYERS[id].charStyle;
+  const prev = PLAYERS[id].charStyle;
+  if (prev !== style) {
+    for (const p of PLAYERS) {
+      if (p.id !== id && p.charStyle === style) {
+        p.charStyle = prev;
+      }
+    }
+    PLAYERS[id].charStyle = style;
+  }
   return style;
 }
 
-/** Cycle a player's character style variant forward or backward, skipping styles taken by other players. */
-export function cyclePlayerCharStyle(id: PlayerId, delta: 1 | -1 = 1): CharStyleId {
+/** Cycle a player's character style variant forward or backward, skipping styles locked by `lockedIds`. */
+export function cyclePlayerCharStyle(
+  id: PlayerId,
+  delta: 1 | -1 = 1,
+  lockedIds?: ReadonlySet<PlayerId>,
+): CharStyleId {
   const cur = PLAYERS[id].charStyle;
   for (let step = 1; step <= CHAR_STYLE_COUNT; step++) {
     const next = ((cur + delta * step + CHAR_STYLE_COUNT * 2) % CHAR_STYLE_COUNT) as CharStyleId;
-    if (!isCharStyleTaken(next, id)) {
-      PLAYERS[id].charStyle = next;
-      return next;
+    if (!isCharStyleTaken(next, id, lockedIds)) {
+      return setPlayerCharStyle(id, next, lockedIds);
     }
   }
   return cur;

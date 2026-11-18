@@ -163,17 +163,17 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private cycleCharacter(id: PlayerId, delta: 1 | -1): void {
-    const next = cyclePlayerCharStyle(id, delta);
+    const next = cyclePlayerCharStyle(id, delta, this.joined);
     this.applyCharacterStyle(id, next);
   }
 
   private selectCharacter(id: PlayerId, style: CharStyleId): void {
     if (PLAYERS[id].charStyle === style) return;
-    if (isCharStyleTaken(style, id)) {
+    if (isCharStyleTaken(style, id, this.joined)) {
       AudioManager.play('wrong');
       return;
     }
-    setPlayerCharStyle(id, style);
+    setPlayerCharStyle(id, style, this.joined);
     this.applyCharacterStyle(id, style);
   }
 
@@ -183,7 +183,7 @@ export class LobbyScene extends Phaser.Scene {
     const col = styleColor(current);
     for (const sw of card.swatches) {
       const active = sw.style === current;
-      const taken = !active && isCharStyleTaken(sw.style, id);
+      const taken = !active && isCharStyleTaken(sw.style, id, this.joined);
       const sc = S * (active ? 0.52 : taken ? 0.26 : 0.36);
       sw.fill.setScale(sc);
       sw.line.setScale(sc);
@@ -193,16 +193,20 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private applyCharacterStyle(id: PlayerId, style: CharStyleId): void {
-    refreshCharacterTextures(this, id);
-    this.world.refreshPlayerArt(id);
+    refreshCharacterTextures(this);
+    for (const p of PLAYERS) {
+      this.world.refreshPlayerArt(p.id);
+      const pCol = playerColor(p.id);
+      const pReadable = playerReadableCss(p.id);
+      const pCard = this.cards[p.id];
+      pCard.ticket.setTexture(RISO_KEYS.ticket(p.id));
+      pCard.charText.setText(charSelectPrompt(p.id, this.joined.has(p.id))).setColor(pReadable);
+      pCard.status.setColor(pReadable);
+      pCard.slam.image.setTint(stampTint(pCol.baseInk));
+      this.refreshSwatches(p.id);
+    }
     const col = styleColor(style);
-    const readable = playerReadableCss(id);
     const card = this.cards[id];
-    card.ticket.setTexture(RISO_KEYS.ticket(id));
-    card.charText.setText(charSelectPrompt(id, this.joined.has(id))).setColor(readable);
-    card.status.setColor(readable);
-    card.slam.image.setTint(stampTint(col.baseInk));
-    for (const p of PLAYERS) this.refreshSwatches(p.id);
     card.slammedAt = this.now;
     card.lastScale = NaN;
     this.juice.splat(ticketX(id) + 92, LOBBY.tickets.y + 54, col.hex, 'small', 1);
@@ -356,6 +360,7 @@ export class LobbyScene extends Phaser.Scene {
     card.slam.image.setVisible(true);
     card.slam.trigger(this.now);
     card.slam.tick(this.now);
+    for (const p of PLAYERS) this.refreshSwatches(p.id);
     this.ensurePracticeBall();
   }
 

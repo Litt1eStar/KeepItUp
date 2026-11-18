@@ -191,6 +191,13 @@ describe('pause menu & key rebinding', () => {
       expect(isCharStyleTaken(4, 0)).toBe(false);
       // Direct assignment to a style taken by another player is rejected
       expect(setPlayerCharStyle(0, 1)).toBe(CHAR_STYLE_COUNT - 1);
+
+      // When only lockedIds ({0}) are protected, P1 can take unjoined P2's style (1) and swap cleanly
+      resetPlayerCharStyles();
+      const locked = new Set<PlayerId>([0]);
+      expect(setPlayerCharStyle(0, 1, locked)).toBe(1);
+      expect(PLAYERS[0].charStyle).toBe(1);
+      expect(PLAYERS[1].charStyle).toBe(0);
       resetPlayerCharStyles();
       expect(PLAYERS[0].charStyle).toBe(0);
       expect(PLAYERS[1].charStyle).toBe(1);
