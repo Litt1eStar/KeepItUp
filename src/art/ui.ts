@@ -80,7 +80,7 @@ const CONTROLS: Record<PlayerId, string> = {
   1: '←/→ · ↑ jump · ↓ dash',
   2: 'J/L · I jump · K dash',
 };
-const NAMES: Record<PlayerId, string> = { 0: 'PIK', 1: 'BLOOP', 2: 'BRICK' };
+export const CHAR_NAMES: Record<PlayerId, string> = { 0: 'PIK', 1: 'BLOOP', 2: 'BRICK' };
 
 function rectPts(x: number, y: number, w: number, h: number): Pt[] {
   return densify([[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]], 8).slice(0, -1);
@@ -151,9 +151,9 @@ function drawTicketBody(ctx: Ctx, id: PlayerId): void {
   let size = 30;
   font(ctx, size, DISPLAY_FONT);
   const maxW = w - 10 - 126;
-  const nw = ctx.measureText(NAMES[id]).width;
+  const nw = ctx.measureText(CHAR_NAMES[id]).width;
   if (nw > maxW) { size = Math.floor((size * maxW) / nw); font(ctx, size, DISPLAY_FONT); }
-  ctx.fillText(NAMES[id], 126, 66);
+  ctx.fillText(CHAR_NAMES[id], 126, 66);
   handLine(ctx, densify([[px + 8, 84], [w - 9, 84]], 6), 130 + id, 0.8, B);
   font(ctx, 8, MONO_FONT);
   ctx.fillText(CONTROLS[id], px + 8, 99);
@@ -178,9 +178,18 @@ function drawTicketBody(ctx: Ctx, id: PlayerId): void {
   ctx.restore();
 }
 
-// ---------------------------------------------------------------- receipt
+// ---------------------------------------------------------------- receipt & report cards
 
 export const RECEIPT = { w: 260, h: 220, tooth: 8, depth: 5 } as const;
+export const REPORT_CARD = { w: 396, h: 436, tooth: 8, depth: 5 } as const;
+export const BOARD_CARD = { w: 452, h: 436, tooth: 8, depth: 5 } as const;
+export const LETTER_BOX = { w: 46, h: 58 } as const;
+
+export interface ReceiptRowData {
+  team: string;
+  score: number;
+  players?: number;
+}
 
 /** "12840" → "12 840" (thin-space thousands like a till printout). */
 export function formatScore(score: number): string {
@@ -193,9 +202,18 @@ export function formatRank(rank: number): string {
 }
 
 /** One receipt row in Space Mono: `01  BOUNCERS ........ 12 840`, spanning x..x+width at baseline y. */
-export function drawReceiptRow(ctx: Ctx, x: number, y: number, width: number, rank: number, team: string, score: number): void {
+export function drawReceiptRow(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  width: number,
+  rank: number,
+  team: string,
+  score: number,
+  fontSize = 10,
+): void {
   ctx.save();
-  font(ctx, 10, MONO_FONT);
+  font(ctx, fontSize, MONO_FONT);
   ctx.fillStyle = INK.black;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
@@ -211,12 +229,15 @@ export function drawReceiptRow(ctx: Ctx, x: number, y: number, width: number, ra
   ctx.restore();
 }
 
-const SAMPLE_ROWS: [string, number][] = [
-  ['BOUNCERS', 12840], ['PIK-NIC', 9120], ['TRIPLE TROUBLE', 7455], ['NO DROPS', 5020], ['BLOOP SQUAD', 3310],
+const SAMPLE_ROWS: ReceiptRowData[] = [
+  { team: 'BOUNCERS', score: 12840 },
+  { team: 'PIK-NIC', score: 9120 },
+  { team: 'TRIPLE TROUBLE', score: 7455 },
+  { team: 'NO DROPS', score: 5020 },
+  { team: 'BLOOP SQUAD', score: 3310 },
 ];
 
-function receiptPath(ctx: Ctx): void {
-  const { w, h, tooth, depth } = RECEIPT;
+function zigzagReceiptPath(ctx: Ctx, w: number, h: number, tooth: number, depth: number): void {
   ctx.beginPath();
   ctx.moveTo(0, depth);
   for (let x = 0; x < w; x += tooth) { ctx.lineTo(x + tooth / 2, 0); ctx.lineTo(Math.min(w, x + tooth), depth); }
@@ -225,23 +246,47 @@ function receiptPath(ctx: Ctx): void {
   ctx.closePath();
 }
 
-/** Sample receipt (RECEIPT.w × RECEIPT.h) with torn zigzag edges, header and 5 rows. */
-export function drawReceipt(ctx: Ctx): void {
-  const { w, h } = RECEIPT;
+function drawDashedRules(ctx: Ctx, x0: number, x1: number, ys: readonly number[]): void {
   ctx.save();
-  receiptPath(ctx);
-  ctx.clip();
-  paperGrain(ctx, w, h, 140);
-  // pink highlighter pass behind the winning row
+  ctx.setLineDash([3, 2]);
+  ctx.strokeStyle = INK.black;
+  ctx.lineWidth = 0.9;
+  for (const y of ys) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+  ctx.restore();
+}
+
+function drawBarcode(ctx: Ctx, x0: number, x1: number, y: number, h: number, seed: number): void {
+  const rnd = seeded(seed);
+  for (let x = x0; x < x1; ) {
+    const bw = 0.7 + rnd() * 2;
+    ctx.fillRect(x, y, bw, h);
+    x += bw + 0.9 + rnd() * 1.8;
+  }
+}
+
+function drawPinkBand(ctx: Ctx, w: number, h: number, bx: number, by: number, bw: number, bh: number, density: number, seed: number): void {
   inkLayer(ctx, 0, 0, w, h, (c) => {
     c.save();
     c.beginPath();
-    c.rect(14, 71, w - 28, 13);
+    c.rect(bx, by, bw, bh);
     c.clip();
-    fillHalftone(c, 14, 71, w - 28, 13, INK.pink, 0.26, 3.2, INK_ANGLE.pink);
+    fillHalftone(c, bx, by, bw, bh, INK.pink, density, 3.2, INK_ANGLE.pink);
     c.restore();
-    mottle(c, w, h, 141, 0.25);
-  }, misregOffset(142));
+    mottle(c, w, h, seed, 0.25);
+  }, misregOffset(seed + 1));
+}
+
+/** Receipt (RECEIPT.w × RECEIPT.h) with torn zigzag edges, header and up to 5 rows (sample data when omitted). */
+export function drawReceipt(ctx: Ctx, rows?: readonly ReceiptRowData[], highlightRank: number | null = 1): void {
+  const { w, h, tooth, depth } = RECEIPT;
+  const list = rows ? rows.slice(0, 5) : SAMPLE_ROWS;
+  ctx.save();
+  zigzagReceiptPath(ctx, w, h, tooth, depth);
+  ctx.clip();
+  paperGrain(ctx, w, h, 140);
+  if (highlightRank !== null && highlightRank >= 1 && highlightRank <= list.length) {
+    drawPinkBand(ctx, w, h, 14, 71 + (highlightRank - 1) * 19, w - 28, 13, 0.26, 141);
+  }
   inkLayer(ctx, 0, 0, w, h, (c) => {
     c.fillStyle = INK.black;
     c.textAlign = 'center';
@@ -249,24 +294,98 @@ export function drawReceipt(ctx: Ctx): void {
     c.fillText('TOP TEAMS', w / 2, 40);
     font(c, 6.5, MONO_FONT, 700);
     c.fillText('KIU-01 · KEEP IT UP! · HIGH SCORES', w / 2, 53);
-    c.setLineDash([3, 2]);
-    c.strokeStyle = INK.black;
-    c.lineWidth = 0.9;
-    for (const y of [61, 172]) { c.beginPath(); c.moveTo(16, y); c.lineTo(w - 16, y); c.stroke(); }
-    c.setLineDash([]);
-    SAMPLE_ROWS.forEach(([team, score], i) => drawReceiptRow(c, 18, 81 + i * 19, w - 36, i + 1, team, score));
+    drawDashedRules(c, 16, w - 16, [61, 172]);
+    if (list.length === 0) {
+      font(c, 9, MONO_FONT, 700);
+      c.fillText('NO SCORES YET — BE FIRST!', w / 2, 118);
+    } else {
+      list.forEach((r, i) => drawReceiptRow(c, 18, 81 + i * 19, w - 36, i + 1, r.team, r.score));
+    }
     c.textAlign = 'center';
     font(c, 7, MONO_FONT);
     c.fillText('THANK YOU FOR KEEPING IT UP', w / 2, 186);
-    const rnd = seeded(150);
-    for (let x = 70; x < w - 70; ) {
-      const bw = 0.7 + rnd() * 2;
-      c.fillRect(x, 192, bw, 14);
-      x += bw + 0.9 + rnd() * 1.8;
-    }
+    drawBarcode(c, 70, w - 70, 192, 14, 150);
     mottle(c, w, h, 151, 0.2);
   });
   ctx.restore();
+}
+
+/** Blank "ROUND REPORT" receipt card (REPORT_CARD.w × REPORT_CARD.h); GameOverScene prints live stats on top. */
+export function drawReportCard(ctx: Ctx): void {
+  const { w, h, tooth, depth } = REPORT_CARD;
+  ctx.save();
+  zigzagReceiptPath(ctx, w, h, tooth, depth);
+  ctx.clip();
+  paperGrain(ctx, w, h, 210);
+  drawPinkBand(ctx, w, h, 22, 29, w - 44, 33, 0.16, 211);
+  inkLayer(ctx, 0, 0, w, h, (c) => {
+    c.fillStyle = INK.black;
+    c.textAlign = 'center';
+    font(c, 8, MONO_FONT, 700);
+    c.fillText('KIU-01 · OFFICIAL TILL REPORT', w / 2, 24);
+    font(c, 34, DISPLAY_FONT);
+    c.fillText('ROUND REPORT', w / 2, 58);
+    drawDashedRules(c, 22, w - 22, [70, 166, 368]);
+    c.textAlign = 'center';
+    font(c, 8, MONO_FONT, 700);
+    c.fillText('THANK YOU FOR KEEPING IT UP', w / 2, 388);
+    drawBarcode(c, 108, w - 108, 396, 18, 215);
+    mottle(c, w, h, 212, 0.2);
+  });
+  ctx.restore();
+}
+
+/** Full 10-row leaderboard receipt for Game Over (BOARD_CARD.w × BOARD_CARD.h), with optional highlighted rank. */
+export function drawBoardReceipt(ctx: Ctx, rows: readonly ReceiptRowData[], highlightRank: number | null): void {
+  const { w, h, tooth, depth } = BOARD_CARD;
+  const list = rows.slice(0, 10);
+  ctx.save();
+  zigzagReceiptPath(ctx, w, h, tooth, depth);
+  ctx.clip();
+  paperGrain(ctx, w, h, 230);
+  if (highlightRank !== null && highlightRank >= 1 && highlightRank <= list.length) {
+    drawPinkBand(ctx, w, h, 18, 75 + (highlightRank - 1) * 27, w - 36, 16, 0.26, 231);
+  }
+  inkLayer(ctx, 0, 0, w, h, (c) => {
+    c.fillStyle = INK.black;
+    c.textAlign = 'center';
+    font(c, 30, DISPLAY_FONT);
+    c.fillText('TOP TEAMS', w / 2, 44);
+    font(c, 7.5, MONO_FONT, 700);
+    c.fillText('KIU-01 · HIGH SCORE REGISTER · TOP 10', w / 2, 60);
+    drawDashedRules(c, 20, w - 20, [70, 368]);
+    if (list.length === 0) {
+      font(c, 11, MONO_FONT, 700);
+      c.fillText('NO SCORES RECORDED YET', w / 2, 210);
+    } else {
+      list.forEach((r, i) => {
+        const label = r.players ? `${r.team} [${r.players}P]` : r.team;
+        drawReceiptRow(c, 24, 86 + i * 27, w - 48, i + 1, label, r.score, 12);
+      });
+    }
+    c.textAlign = 'center';
+    font(c, 8, MONO_FONT, 700);
+    c.fillText('THANK YOU FOR KEEPING IT UP', w / 2, 388);
+    drawBarcode(c, 128, w - 128, 396, 18, 235);
+    mottle(c, w, h, 232, 0.2);
+  });
+  ctx.restore();
+}
+
+/** Rubber-stamp letter frame in white (tint at runtime with stampTint + MULTIPLY). */
+export function drawLetterBox(ctx: Ctx): void {
+  const { w, h } = LETTER_BOX;
+  ctx.save();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2.8;
+  roundRectPath(ctx, 3, 3, w - 6, h - 6, 6);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  roundRectPath(ctx, 7, 7, w - 14, h - 14, 3.5);
+  ctx.stroke();
+  ctx.restore();
+  mottle(ctx, w, h, 260, 0.35);
+  speckle(ctx, w, h, '#fff', 261, 6);
 }
 
 // ---------------------------------------------------------------- next-ball dots

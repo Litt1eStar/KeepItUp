@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import '@fontsource/lilita-one/400.css'; // bundled locally: works offline at the booth
-import '@fontsource/anton/400.css';
+import '@fontsource/anton/400.css'; // bundled locally: works offline at the booth
 import '@fontsource/space-mono/400.css';
 import '@fontsource/space-mono/700.css';
 import { TUNING as T } from './config/tuning';
 import { RS } from './config/render';
+import { PAPER } from './art/palette';
 import { BootScene } from './scenes/BootScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { GameScene } from './scenes/GameScene';
@@ -16,13 +16,12 @@ async function start(): Promise<void> {
   // screen renders with the fallback font.
   try {
     await Promise.all([
-      document.fonts.load('40px "Lilita One"'),
       document.fonts.load('40px "Anton"'),
       document.fonts.load('20px "Space Mono"'),
       document.fonts.load('bold 20px "Space Mono"'),
     ]);
   } catch {
-    /* fall back to Arial Black */
+    /* fall back to system font */
   }
 
   const game = new Phaser.Game({
@@ -30,7 +29,7 @@ async function start(): Promise<void> {
     parent: 'game',
     width: T.width * RS,
     height: T.height * RS,
-    backgroundColor: '#0d0f1a',
+    backgroundColor: PAPER,
     antialias: true,
     scale: {
       mode: Phaser.Scale.FIT,

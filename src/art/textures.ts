@@ -14,7 +14,11 @@ import { CHAR_SHADOW_R, CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterF
 import { ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
 import { drawStage } from './stage';
 import { SHADOW_STEPS } from './shadow';
-import { DOT_TEX, RECEIPT, STAMP_IDS, TICKET, drawDot, drawReceipt, drawStamp, drawTicket, stampSize, type StampId } from './ui';
+import {
+  BOARD_CARD, DOT_TEX, LETTER_BOX, RECEIPT, REPORT_CARD, STAMP_IDS, TICKET,
+  drawBoardReceipt, drawDot, drawLetterBox, drawReceipt, drawReportCard, drawStamp, drawTicket, stampSize,
+  type ReceiptRowData, type StampId,
+} from './ui';
 import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
 import { ARROW_TEX, drawArrow } from './arrow';
 
@@ -45,6 +49,10 @@ export const RISO_KEYS = {
   splatLine: (v: number) => `riso:splatLine:${v}`,
   ticket: (id: PlayerId) => `riso:ticket${id}`,
   receipt: 'riso:receipt',
+  lobbyReceipt: 'riso:lobbyReceipt',
+  reportCard: 'riso:reportCard',
+  gameOverReceipt: 'riso:gameOverReceipt',
+  letterBox: 'riso:letterBox',
   dot: 'riso:dot',
   dotEmpty: 'riso:dotEmpty',
 } as const;
@@ -128,7 +136,29 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
     tex(K.splatLine(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplatLine(c, v));
   }
   for (const p of PLAYERS) tex(K.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
-  tex(K.receipt, RECEIPT.w, RECEIPT.h, drawReceipt);
+  tex(K.receipt, RECEIPT.w, RECEIPT.h, (c) => drawReceipt(c));
+  tex(K.reportCard, REPORT_CARD.w, REPORT_CARD.h, drawReportCard);
+  tex(K.letterBox, LETTER_BOX.w, LETTER_BOX.h, drawLetterBox);
   tex(K.dot, DOT_TEX, DOT_TEX, (c) => drawDot(c, true));
   tex(K.dotEmpty, DOT_TEX, DOT_TEX, (c) => drawDot(c, false));
+}
+
+/** Ensure Game Over static card/frame textures exist on `scene`. */
+export function ensureReportTextures(scene: Phaser.Scene): void {
+  if (!scene.textures.exists(RISO_KEYS.reportCard)) {
+    canvasTexture(scene, RISO_KEYS.reportCard, REPORT_CARD.w, REPORT_CARD.h, drawReportCard);
+  }
+  if (!scene.textures.exists(RISO_KEYS.letterBox)) {
+    canvasTexture(scene, RISO_KEYS.letterBox, LETTER_BOX.w, LETTER_BOX.h, drawLetterBox);
+  }
+}
+
+/** Render or update the live 5-row Lobby leaderboard receipt texture. */
+export function renderLobbyReceipt(scene: Phaser.Scene, rows: readonly ReceiptRowData[]): void {
+  canvasTexture(scene, RISO_KEYS.lobbyReceipt, RECEIPT.w, RECEIPT.h, (c) => drawReceipt(c, rows, rows.length > 0 ? 1 : null));
+}
+
+/** Render or update the live 10-row Game Over leaderboard receipt texture. */
+export function renderGameOverReceipt(scene: Phaser.Scene, rows: readonly ReceiptRowData[], highlightRank: number | null): void {
+  canvasTexture(scene, RISO_KEYS.gameOverReceipt, BOARD_CARD.w, BOARD_CARD.h, (c) => drawBoardReceipt(c, rows, highlightRank));
 }
