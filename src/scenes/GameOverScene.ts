@@ -15,7 +15,7 @@ import { StampSlam } from '../art/views/StampSlam';
 import { PrintRoller } from '../art/views/PrintRoller';
 import {
   GAME_OVER, boardCountdownLabel, entryCountdownLabel, formatDotRow,
-  reportLinesVisible, slotRotation, slotX, teamLabel,
+  mvpAwardLabel, reportLinesVisible, slotRotation, slotX, teamLabel,
 } from '../art/screens';
 import type { GameResult } from './GameScene';
 
@@ -151,6 +151,7 @@ export class GameOverScene extends Phaser.Scene {
       scoreGroup.push(slam.image);
     }
 
+    const award = mvpAwardLabel(r);
     const rowY = (idx: number) => rep.lineY0 + idx * rep.lineStep;
     this.reportLines = [
       scoreGroup,
@@ -158,10 +159,9 @@ export class GameOverScene extends Phaser.Scene {
       [monoLine(rowY(1), formatDotRow('TIME SURVIVED', formatClock(r.time)))],
       [monoLine(rowY(2), formatDotRow('BEST COMBO', `×${r.bestCombo}`))],
       [monoLine(rowY(3), formatDotRow('GOOD HITS', formatScore(r.correctHits)))],
-      [
-        monoLine(rowY(4), formatDotRow('BEST ON RECORD', formatScore(Math.max(prevBest, r.score)))),
-        monoLine(rowY(5), isNewBest ? '★ NEW RECORD PRINTED ★' : 'END OF REPORT', isNewBest ? INK.pink : INK.black, true),
-      ],
+      [monoLine(rowY(4), formatDotRow('BEST ON RECORD', formatScore(Math.max(prevBest, r.score))))],
+      [monoLine(rowY(5), formatDotRow(award.left, award.right), INK.pink)],
+      [monoLine(rowY(6), isNewBest ? '★ NEW RECORD PRINTED ★' : 'END OF REPORT', isNewBest ? INK.pink : INK.black, true)],
     ];
   }
 

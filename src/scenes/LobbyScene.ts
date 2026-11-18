@@ -243,7 +243,7 @@ export class LobbyScene extends Phaser.Scene {
       .setBlendMode(MULTIPLY)
       .setDepth(5);
     this.add
-      .text(m.x, m.subY, 'HIT BALLS THAT MATCH YOUR INK & SHAPE · DASH TO PASS', risoText(m.subSize, INK.black, 'mono'))
+      .text(m.x, m.subY, 'HOLD JUMP = HIGHER · DASH = PASS / BUMP · HIT TARGETS', risoText(m.subSize, INK.black, 'mono'))
       .setFontStyle('bold')
       .setBlendMode(MULTIPLY)
       .setDepth(5);

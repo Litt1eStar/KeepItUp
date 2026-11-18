@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   GAME_OVER, LOBBY, MENU_ITEMS, MENU_LAYOUT, PAUSE_ITEMS, PAUSE_LAYOUT, PROMPT_BLINK_ON, PROMPT_BLINK_PERIOD, REPORT_LINE_STEP_MS, ROLLER_STEP_MS, ROLLER_STEPS,
-  boardCountdownLabel, charSelectPrompt, entryCountdownLabel, formatDotRow, joinPrompt, menuItemY, padLabel, padSlotLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
+  boardCountdownLabel, charSelectPrompt, entryCountdownLabel, formatDotRow, joinPrompt, menuItemY, mvpAwardLabel, padLabel, padSlotLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
   reportLinesVisible, rollerCoverWidth, rollerExitWidth, slotRotation, slotX, teamLabel, ticketX,
 } from '../src/art/screens';
 import { STEP_MS } from '../src/art/motion';
@@ -80,6 +80,19 @@ describe('game over report & entry', () => {
 
     expect(teamLabel([])).toBe('PIK ▲');
     expect(teamLabel([0, 1, 2])).toBe('PIK ▲ · BLOOP ● · BRICK ■');
+
+    expect(mvpAwardLabel({ players: [0, 1], playerHits: { 0: 5, 1: 12 } })).toEqual({
+      left: '★ ROUND MVP',
+      right: 'BLOOP ● (12)',
+    });
+    expect(mvpAwardLabel({ players: [0], clutchSaves: 3, dashPasses: 2 })).toEqual({
+      left: 'CLUTCH SAVES',
+      right: '3',
+    });
+    expect(mvpAwardLabel({ players: [0], clutchSaves: 0, dashPasses: 4 })).toEqual({
+      left: 'DASH PASSES',
+      right: '4',
+    });
 
     for (let i = 1; i < 8; i++) expect(slotX(i)).toBeGreaterThan(slotX(i - 1));
     for (let i = 0; i < 8; i++) expect(Math.abs(slotRotation(i))).toBeLessThan(0.1);

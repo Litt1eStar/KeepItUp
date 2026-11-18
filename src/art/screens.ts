@@ -16,7 +16,7 @@ export const LOBBY = {
   masthead: { x: 132, issueY: 14, issueSize: 11, headlineY: 32, headlineSize: 24, subY: 64, subSize: 11, ruleY: 90, ruleW: 494 },
   tickets: { x0: 28, y: 112, gap: 14, scale: 1, stampOffsetX: 115, stampOffsetY: 50, stampRot: -0.18, stampScale: 0.72, swatchY: 245, swatchGap: 29, charY: 263, statusY: 280, padY: 297 },
   receipt: { x: 664, y: 18 },
-  startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'SPACE / START PLAY · ESC CONTROLS · SOLO OK · F FULLSCREEN' },
+  startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'SPACE / START PLAY · ESC CONTROLS · M MUTE · F FULLSCREEN' },
 } as const;
 
 /** Left edge of player `id`'s ticket stub on the lobby zine cover. */
@@ -66,7 +66,7 @@ export const GAME_OVER = {
   report: {
     x: 36, y: 20, w: REPORT_CARD.w, h: REPORT_CARD.h,
     scoreY: 112, scoreSize: 52, newBestX: 318, newBestY: 126,
-    lineX: 60, lineY0: 196, lineStep: 32, lineSize: 12, cols: 44,
+    lineX: 60, lineY0: 190, lineStep: 27, lineSize: 12, cols: 44,
   },
   entry: {
     x: 464, titleY: 36, titleSize: 38, subY: 86, subSize: 12,
@@ -94,6 +94,33 @@ export function formatDotRow(left: string, right: string, cols = GAME_OVER.repor
 export function teamLabel(players: readonly PlayerId[]): string {
   const list = players.length > 0 ? players : ([0] as const);
   return list.map((id) => `${CHAR_NAMES[id]} ${PLAYERS[id].glyph}`).join(' · ');
+}
+
+/** Highlight award row for the Round Report receipt (MVP in co-op, Clutch/Passes in solo). */
+export function mvpAwardLabel(result: {
+  players: readonly PlayerId[];
+  playerHits?: Partial<Record<PlayerId, number>>;
+  dashPasses?: number;
+  clutchSaves?: number;
+}): { left: string; right: string } {
+  if (result.players.length > 1 && result.playerHits) {
+    let bestId = result.players[0];
+    let bestHits = -1;
+    for (const id of result.players) {
+      const h = result.playerHits[id] ?? 0;
+      if (h > bestHits) {
+        bestHits = h;
+        bestId = id;
+      }
+    }
+    if (bestHits > 0) {
+      return { left: '★ ROUND MVP', right: `${CHAR_NAMES[bestId]} ${PLAYERS[bestId].glyph} (${bestHits})` };
+    }
+  }
+  if ((result.clutchSaves ?? 0) > 0) {
+    return { left: 'CLUTCH SAVES', right: String(result.clutchSaves) };
+  }
+  return { left: 'DASH PASSES', right: String(result.dashPasses ?? 0) };
 }
 
 /** Horizontal centre of rubber-stamp name slot `i` (0..NAME_LEN-1). */
@@ -157,7 +184,7 @@ export const MENU_LAYOUT = {
   arrowX: 62,
   receiptX: 664,
   receiptY: 20,
-  hint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'ENTER / SPACE / START = PLAY · ESC = CONTROLS · F = FULLSCREEN' },
+  hint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'ENTER / SPACE / START = PLAY · ESC CONTROLS · M MUTE · F FULLSCREEN' },
 } as const;
 
 export function menuItemY(i: number): number {

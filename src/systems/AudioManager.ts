@@ -71,6 +71,7 @@ export class AudioManager {
   private static musicTimer: ReturnType<typeof setInterval> | null = null;
   private static musicMode: MusicMode = 'off';
   private static musicDucked = false;
+  private static musicTension = 1;
   private static nextStepTime = 0;
   private static stepIdx = 0;
   static muted = false;
@@ -104,6 +105,11 @@ export class AudioManager {
   static setMusicDucked(ducked: boolean): void {
     AudioManager.musicDucked = ducked;
     AudioManager.applyMusicGain();
+  }
+
+  /** Scale BGM tempo during intense moments (e.g. 1.0 normal, 1.12 multi-ball, 1.22 danger). */
+  static setMusicTension(mult: number): void {
+    AudioManager.musicTension = Math.max(0.8, Math.min(1.5, mult));
   }
 
   static toggleMute(): boolean {
@@ -157,7 +163,7 @@ export class AudioManager {
     const mode = AudioManager.musicMode;
     if (!ctx || !out || mode === 'off' || AudioManager.muted || ctx.state !== 'running') return;
 
-    const stepS = BGM_STEP_S[mode];
+    const stepS = BGM_STEP_S[mode] / AudioManager.musicTension;
     const pat = BGM_PATTERNS[mode];
     const horizon = ctx.currentTime + 0.16;
     if (AudioManager.nextStepTime < ctx.currentTime - 0.1) {

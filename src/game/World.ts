@@ -21,6 +21,7 @@ export interface HitEvent {
   combo: number;
   jumpHit: boolean;
   dashPass: boolean;
+  clutch: boolean;
 }
 
 export interface BumpEvent {
@@ -345,11 +346,12 @@ export class World extends Phaser.Events.EventEmitter {
       ball.vx = Phaser.Math.Clamp(rawVx, -T.hitVxMax * T.hitVxTransferClampMult, T.hitVxMax * T.hitVxTransferClampMult);
     }
 
+    const clutch = ball.inDanger;
     ball.hitCooldown = T.hitCooldown;
     ball.inDanger = false;
     ball.setTarget(next);
     this.offscreen.get(ball)?.setTexture(RISO_KEYS.offscreen(next));
-    const ev: HitEvent = { ball, player: p, correct, combo: this.combo, jumpHit, dashPass };
+    const ev: HitEvent = { ball, player: p, correct, combo: this.combo, jumpHit, dashPass, clutch };
     this.emit('hit', ev);
   }
 

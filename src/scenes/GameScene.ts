@@ -34,6 +34,9 @@ export interface GameResult {
   bestCombo: number;
   correctHits: number;
   players: PlayerId[];
+  playerHits?: Partial<Record<PlayerId, number>>;
+  dashPasses?: number;
+  clutchSaves?: number;
 }
 
 const HUD_DEPTH = 45;
@@ -51,6 +54,9 @@ export class GameScene extends Phaser.Scene {
   private elapsed = 0;
   private nextBallAt: number = T.extraBallInterval;
   private correctHits = 0;
+  private playerHits: Record<PlayerId, number> = { 0: 0, 1: 0, 2: 0 };
+  private dashPasses = 0;
+  private clutchSaves = 0;
   /** Consecutive correct hits (reset by a wrong hit), drives the NICE stamp cadence. */
   private streak = 0;
   private hitStopMs = 0;
@@ -82,6 +88,9 @@ export class GameScene extends Phaser.Scene {
     this.elapsed = 0;
     this.nextBallAt = T.extraBallInterval;
     this.correctHits = 0;
+    this.playerHits = { 0: 0, 1: 0, 2: 0 };
+    this.dashPasses = 0;
+    this.clutchSaves = 0;
     this.streak = 0;
     this.hitStopMs = 0;
     this.timeScale = 1;
@@ -118,6 +127,7 @@ export class GameScene extends Phaser.Scene {
     this.wireEvents();
     this.roller = new PrintRoller(this);
     if (!this.attract) {
+      this.juice.popup(T.width / 2, 165, 'KEEP IT UP! · DASH TO PASS', 'pink', 20);
       this.pauseMenu = new PauseMenu(this, {
         onResume: () => {
           this.inputMgr.clearLatched();
@@ -138,6 +148,7 @@ export class GameScene extends Phaser.Scene {
       this.best = b;
     });
     this.events.once('shutdown', () => {
+      AudioManager.setMusicTension(1);
       this.roller.destroy();
       this.world.destroy();
     });
@@ -219,9 +230,16 @@ export class GameScene extends Phaser.Scene {
     this.juice.splat(e.ball.x, e.ball.bottom, col.hex, e.jumpHit ? 'jump' : 'hit');
     AudioManager.play(e.jumpHit ? 'jumpHit' : 'hit');
 
+    if (e.dashPass) this.dashPasses++;
+    if (e.clutch) {
+      this.clutchSaves++;
+      this.juice.popup(e.player.x, e.player.top - 22, 'CLUTCH!', 'pink', 18);
+    }
+
     let nice = false;
     if (e.correct) {
       this.correctHits++;
+      this.playerHits[e.player.id]++;
       this.streak++;
       const pts = hitPoints(e.combo, T);
       this.score += pts;
@@ -250,6 +268,7 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     this.over = true;
     this.pauseMenu?.hide();
+    AudioManager.setMusicTension(1);
     AudioManager.setMusicDucked(true);
     this.timeScale = T.slowMoScale;
     AudioManager.play('gameover');
@@ -270,6 +289,9 @@ export class GameScene extends Phaser.Scene {
         bestCombo: this.world.bestCombo,
         correctHits: this.correctHits,
         players: this.data_.players,
+        playerHits: { ...this.playerHits },
+        dashPasses: this.dashPasses,
+        clutchSaves: this.clutchSaves,
       };
       this.roller.exitTo('GameOver', result);
     });
@@ -319,6 +341,10 @@ export class GameScene extends Phaser.Scene {
 
     const source: InputSource = this.bot ?? this.inputMgr;
     this.world.step(dt, source);
+    if (!this.over) {
+      const inDanger = this.world.balls.some((b) => b.inDanger);
+      AudioManager.setMusicTension(inDanger ? 1.22 : this.world.balls.length >= 2 ? 1.12 : 1);
+    }
     this.world.render(dt, time);
     this.updateHud(time);
   }

@@ -50,6 +50,8 @@ export class PauseMenu {
   private readonly titleShadow: Phaser.GameObjects.Text;
   private readonly titleFront: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
+  private readonly soundBtn: Phaser.GameObjects.Text;
+  private lastMutedShown = false;
   private readonly mainTexts: Phaser.GameObjects.Text[] = [];
   private readonly mainArrow: Phaser.GameObjects.Image;
   private readonly cells: CtrlCell[][] = [];
@@ -147,8 +149,20 @@ export class PauseMenu {
     this.ctrlGroup = scene.add.container(0, 0).setVisible(false);
     this.buildControlsGroup(scene);
 
+    this.soundBtn = scene.add
+      .text(L.card.x + L.card.w - 22, L.tagY, '', risoText(9, INK.black, 'mono'))
+      .setFontStyle('bold')
+      .setOrigin(1, 0.5)
+      .setBlendMode(MULTIPLY)
+      .setInteractive({ useHandCursor: true });
+    this.soundBtn.on('pointerdown', () => {
+      if (!this.open) return;
+      AudioManager.toggleMute();
+      this.refreshSoundLabel();
+    });
+
     this.root = scene.add
-      .container(0, 0, [card, this.tag, this.titleShadow, this.titleFront, this.mainGroup, this.ctrlGroup, this.hint])
+      .container(0, 0, [card, this.tag, this.soundBtn, this.titleShadow, this.titleFront, this.mainGroup, this.ctrlGroup, this.hint])
       .setDepth(80)
       .setVisible(false);
 
@@ -167,8 +181,16 @@ export class PauseMenu {
     this.mainCursor = 0;
     this.listening = false;
     this.root.setVisible(true);
+    this.refreshSoundLabel();
     this.setView(this.callbacks.controlsOnly ? 'controls' : 'main');
     AudioManager.play('select');
+  }
+
+  private refreshSoundLabel(): void {
+    this.lastMutedShown = AudioManager.muted;
+    this.soundBtn
+      .setText(AudioManager.muted ? 'SOUND: MUTED [M]' : 'SOUND: ON [M]')
+      .setColor(AudioManager.muted ? INK.pink : INK.black);
   }
 
   hide(): void {
@@ -181,6 +203,7 @@ export class PauseMenu {
   tick(tMs: number, inputMgr?: InputManager): void {
     this.now = tMs;
     if (!this.open) return;
+    if (this.lastMutedShown !== AudioManager.muted) this.refreshSoundLabel();
     if (inputMgr && !this.listening) {
       this.handlePadInput(inputMgr);
       if (!this.open) return;
