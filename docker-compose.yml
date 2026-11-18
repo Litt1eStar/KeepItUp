@@ -1,0 +1,11 @@
+services:
+  keepitup:
+    build: .
+    container_name: keep-it-up
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8643}:8643"
+    environment:
+      PORT: "8643"
+      HOST: "0.0.0.0"
+      TZ: "${TZ:-Asia/Bangkok}"
