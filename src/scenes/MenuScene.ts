@@ -220,7 +220,14 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScale(S)
       .setDepth(5);
+    const loading = this.add
+      .text(L.receiptX + RECEIPT.w / 2, L.receiptY + RECEIPT.h - 32, 'LOADING...', risoText(10, INK.pink, 'mono'))
+      .setFontStyle('bold')
+      .setOrigin(0.5)
+      .setBlendMode(MULTIPLY)
+      .setDepth(7);
     const top = await leaderboard.top(5);
+    loading.destroy();
     if (!this.sys.isActive()) return;
     renderLobbyReceipt(this, top);
     this.receiptImg.setTexture(RISO_KEYS.lobbyReceipt);

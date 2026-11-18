@@ -100,59 +100,99 @@ function canvasTexture(scene: Phaser.Scene, key: string, w: number, h: number, d
   tex.refresh();
 }
 
-export function generateRisoTextures(scene: Phaser.Scene): void {
+interface TextureStage {
+  label: string;
+  run: () => void;
+}
+
+function risoTextureStages(scene: Phaser.Scene): TextureStage[] {
   const K = RISO_KEYS;
   const tex = (key: string, w: number, h: number, draw: (ctx: Ctx) => void) => canvasTexture(scene, key, w, h, draw);
-
-  tex(K.bg, T.width, T.height, drawStage);
-
-  for (const p of PLAYERS) {
-    tex(K.charFill(p.id), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterFill(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy));
-    for (let v = 0; v < BOIL_VARIANTS; v++) {
-      tex(K.charLine(p.id, v), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterLine(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy, v));
-    }
-  }
-  tex(K.pupil, PUPIL_TEX_SIZE, PUPIL_TEX_SIZE, (c) => drawPupil(c, PUPIL_TEX_SIZE / 2, PUPIL_TEX_SIZE / 2));
-  tex(K.speedlines, SPEEDLINES_TEX.w, SPEEDLINES_TEX.h, (c) => drawSpeedlines(c));
-
   const r = T.ballRadius;
   const ball = ballArt(r);
-  for (const p of PLAYERS) tex(K.ballFill(p.id), ball.size, ball.size, (c) => drawBallFill(c, p.id, r));
-  for (let v = 0; v < BOIL_VARIANTS; v++) tex(K.ballLine(v), ball.size, ball.size, (c) => drawBallLine(c, r, v));
   const inc = incomingTexSize(r);
-  for (const p of PLAYERS) tex(K.incoming(p.id), inc, inc, (c) => drawIncomingRing(c, p.id, r));
   const sh = shadowTexSize(r);
-  for (let n = 0; n < SHADOW_STEPS; n++) {
-    tex(K.shadow(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.black, INK_ANGLE.black));
-    tex(K.shadowDanger(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.pink, INK_ANGLE.pink));
-  }
   const csh = shadowTexSize(CHAR_SHADOW_R);
-  for (let n = 0; n < SHADOW_STEPS; n++) {
-    tex(K.charShadow(n), csh.w, csh.h, (c) => drawShadow(c, CHAR_SHADOW_R, n, INK.black, INK_ANGLE.black));
-  }
-  for (const p of PLAYERS) {
-    tex(K.arrow(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, false));
-    tex(K.offscreen(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, true));
-  }
 
-  const measure = document.createElement('canvas').getContext('2d')!;
-  for (const id of STAMP_IDS) {
-    const { w, h } = stampSize(measure, id);
-    tex(K.stamp(id), w, h, (c) => drawStamp(c, id, w, h));
-    tex(K.stampFaint(id), w, h, (c) => drawFaintStamp(c, id, w, h));
+  return [
+    {
+      label: 'PRINTING STAGE...',
+      run: () => tex(K.bg, T.width, T.height, drawStage),
+    },
+    {
+      label: 'INKING CHARACTERS...',
+      run: () => {
+        for (const p of PLAYERS) {
+          tex(K.charFill(p.id), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterFill(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy));
+          for (let v = 0; v < BOIL_VARIANTS; v++) {
+            tex(K.charLine(p.id, v), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterLine(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy, v));
+          }
+        }
+        tex(K.pupil, PUPIL_TEX_SIZE, PUPIL_TEX_SIZE, (c) => drawPupil(c, PUPIL_TEX_SIZE / 2, PUPIL_TEX_SIZE / 2));
+        tex(K.speedlines, SPEEDLINES_TEX.w, SPEEDLINES_TEX.h, (c) => drawSpeedlines(c));
+        ensureCharStyleTextures(scene);
+      },
+    },
+    {
+      label: 'PRINTING BALLS & HALFTONES...',
+      run: () => {
+        for (const p of PLAYERS) tex(K.ballFill(p.id), ball.size, ball.size, (c) => drawBallFill(c, p.id, r));
+        for (let v = 0; v < BOIL_VARIANTS; v++) tex(K.ballLine(v), ball.size, ball.size, (c) => drawBallLine(c, r, v));
+        for (const p of PLAYERS) tex(K.incoming(p.id), inc, inc, (c) => drawIncomingRing(c, p.id, r));
+        for (let n = 0; n < SHADOW_STEPS; n++) {
+          tex(K.shadow(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.black, INK_ANGLE.black));
+          tex(K.shadowDanger(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.pink, INK_ANGLE.pink));
+          tex(K.charShadow(n), csh.w, csh.h, (c) => drawShadow(c, CHAR_SHADOW_R, n, INK.black, INK_ANGLE.black));
+        }
+        for (const p of PLAYERS) {
+          tex(K.arrow(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, false));
+          tex(K.offscreen(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, true));
+        }
+      },
+    },
+    {
+      label: 'STAMPING UI & TICKETS...',
+      run: () => {
+        const measure = document.createElement('canvas').getContext('2d')!;
+        for (const id of STAMP_IDS) {
+          const { w, h } = stampSize(measure, id);
+          tex(K.stamp(id), w, h, (c) => drawStamp(c, id, w, h));
+          tex(K.stampFaint(id), w, h, (c) => drawFaintStamp(c, id, w, h));
+        }
+        for (let v = 0; v < BOIL_VARIANTS; v++) {
+          tex(K.splat(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplat(c, v));
+          tex(K.splatLine(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplatLine(c, v));
+        }
+        for (const p of PLAYERS) tex(K.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
+        tex(K.receipt, RECEIPT.w, RECEIPT.h, (c) => drawReceipt(c));
+        tex(K.reportCard, REPORT_CARD.w, REPORT_CARD.h, drawReportCard);
+        tex(K.letterBox, LETTER_BOX.w, LETTER_BOX.h, drawLetterBox);
+        tex(K.pauseCard, PAUSE_CARD.w, PAUSE_CARD.h, drawPauseCard);
+        tex(K.targetRing, TARGET_TEX, TARGET_TEX, drawTargetRing);
+        tex(K.dot, DOT_TEX, DOT_TEX, (c) => drawDot(c, true));
+        tex(K.dotEmpty, DOT_TEX, DOT_TEX, (c) => drawDot(c, false));
+      },
+    },
+  ];
+}
+
+export function generateRisoTextures(scene: Phaser.Scene): void {
+  for (const stage of risoTextureStages(scene)) stage.run();
+}
+
+/** Generate riso textures across yielded frames so the loading screen can render progress. */
+export async function generateRisoTexturesAsync(
+  scene: Phaser.Scene,
+  onProgress: (fraction: number, label: string) => void,
+): Promise<void> {
+  const stages = risoTextureStages(scene);
+  for (let i = 0; i < stages.length; i++) {
+    onProgress(i / stages.length, stages[i].label);
+    await new Promise<void>((resolve) => setTimeout(resolve, 16));
+    if (!scene.sys.isActive()) return;
+    stages[i].run();
   }
-  for (let v = 0; v < BOIL_VARIANTS; v++) {
-    tex(K.splat(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplat(c, v));
-    tex(K.splatLine(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplatLine(c, v));
-  }
-  for (const p of PLAYERS) tex(K.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
-  tex(K.receipt, RECEIPT.w, RECEIPT.h, (c) => drawReceipt(c));
-  tex(K.reportCard, REPORT_CARD.w, REPORT_CARD.h, drawReportCard);
-  tex(K.letterBox, LETTER_BOX.w, LETTER_BOX.h, drawLetterBox);
-  tex(K.pauseCard, PAUSE_CARD.w, PAUSE_CARD.h, drawPauseCard);
-  tex(K.targetRing, TARGET_TEX, TARGET_TEX, drawTargetRing);
-  tex(K.dot, DOT_TEX, DOT_TEX, (c) => drawDot(c, true));
-  tex(K.dotEmpty, DOT_TEX, DOT_TEX, (c) => drawDot(c, false));
+  onProgress(1, 'READY!');
 }
 
 /** Ensure Game Over static card/frame textures exist on `scene`. */

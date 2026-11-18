@@ -25,6 +25,9 @@ async function start(): Promise<void> {
     /* fall back to system font */
   }
 
+  // Remove initial HTML splash right as Phaser takes over the canvas.
+  document.getElementById('boot-splash')?.remove();
+
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',

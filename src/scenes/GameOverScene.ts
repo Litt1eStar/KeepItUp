@@ -99,9 +99,19 @@ export class GameOverScene extends Phaser.Scene {
       this.roller.destroy();
     });
 
+    const loading = this.add
+      .text(GAME_OVER.entry.x + INPUT_W / 2, GAME_OVER.entry.slotY, 'PRINTING REPORT...', risoText(14, INK.black, 'mono'))
+      .setFontStyle('bold')
+      .setOrigin(0.5)
+      .setBlendMode(MULTIPLY)
+      .setDepth(6);
+
     const r = this.result;
     const prevBest = await leaderboard.best();
-    if (!this.sys.isActive()) return;
+    if (!this.sys.isActive()) {
+      loading.destroy();
+      return;
+    }
 
     this.buildReport(r, prevBest);
     this.countdown = this.add
@@ -110,7 +120,10 @@ export class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(10);
 
-    if (await leaderboard.qualifies(r.score)) this.showEntry();
+    const qualifies = await leaderboard.qualifies(r.score);
+    loading.destroy();
+    if (!this.sys.isActive()) return;
+    if (qualifies) this.showEntry();
     else void this.showBoard(null);
   }
 
