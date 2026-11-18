@@ -11,7 +11,7 @@ type Ctx = CanvasRenderingContext2D;
  * on big booth screens. Images using these textures are displayed at scale S = 1/RS.
  *
  * To swap in real art later: load images with the same keys here
- * (bg, player0-2, ball0-2, arrow0-2, offscreen0-2, spark), drawn at RS× size.
+ * (bg, player0-2, ball0-2, arrow0-2, offscreen0-2), drawn at RS× size.
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -26,15 +26,6 @@ export class BootScene extends Phaser.Scene {
       this.makeArrow(`arrow${p.id}`, p.color, p.shape, false);
       this.makeArrow(`offscreen${p.id}`, p.color, p.shape, true);
     }
-    this.canvasTexture('spark', 16, 16, (ctx) => {
-      const g = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
-      g.addColorStop(0, 'rgba(255,255,255,1)');
-      g.addColorStop(0.35, 'rgba(255,255,255,0.85)');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, 16, 16);
-    });
-
     generateRisoTextures(this);
 
     this.scene.start(new URLSearchParams(location.search).has('styletile') ? 'StyleTile' : 'Lobby');

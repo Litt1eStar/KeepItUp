@@ -68,7 +68,9 @@ export class World extends Phaser.Events.EventEmitter {
     const bx = x ?? Phaser.Math.Between(140, T.width - 140);
     const ball = new Ball(this.scene, bx, 120, target, floatTime); // below the HUD strip
     this.balls.push(ball);
-    this.offscreen.set(ball, this.scene.add.image(bx, 18, RISO_KEYS.offscreen(target)).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(48) /* above HUD text */.setVisible(false));
+    // Above the HUD (depth 45) and NORMAL blend, not MULTIPLY: it sits in the top band over black HUD
+    // type, where a multiplied ink would vanish. Printed opaque like a sticker, it always reads.
+    this.offscreen.set(ball, this.scene.add.image(bx, 18, RISO_KEYS.offscreen(target)).setScale(S).setDepth(48).setVisible(false));
     return ball;
   }
 

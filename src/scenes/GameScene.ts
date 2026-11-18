@@ -1,15 +1,22 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
+import { S } from '../config/render';
 import type { PlayerId } from '../config/players';
 import { InputManager, type InputSource } from '../input/InputManager';
 import { BotInput } from '../input/BotInput';
 import { World, type HitEvent } from '../game/World';
-import { drawStage, textStyle } from '../game/stage';
+import { drawStage } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
 import { comboMultiplier, hitPoints, timePoints } from '../logic/Scoring';
 import { leaderboard } from '../services/Leaderboard';
 import type { Ball } from '../entities/Ball';
+import { INK, PAPER, PLAYER_INK } from '../art/palette';
+import { risoText } from '../art/type';
+import { RISO_KEYS } from '../art/textures';
+import { formatScore } from '../art/ui';
+import { HUD, bestLabel, demoStripVisible, dotX, dotsFilled, formatClock, isComboMilestone, niceDue } from '../art/hud';
+import { ComboLabel } from '../art/views/ComboLabel';
 
 export interface GameData {
   mode: 'play' | 'attract';
@@ -24,6 +31,8 @@ export interface GameResult {
   players: PlayerId[];
 }
 
+const HUD_DEPTH = 45;
+
 export class GameScene extends Phaser.Scene {
   private data_!: GameData;
   private inputMgr!: InputManager;
@@ -35,19 +44,25 @@ export class GameScene extends Phaser.Scene {
   private elapsed = 0;
   private nextBallAt: number = T.extraBallInterval;
   private correctHits = 0;
+  /** Consecutive correct hits (reset by a wrong hit), drives the NICE stamp cadence. */
+  private streak = 0;
   private hitStopMs = 0;
   private timeScale = 1;
   private over = false;
   private best = 0;
+  /** Scene time (ms) of the current frame; every effect is timed from it. */
+  private now = 0;
 
   private hud!: {
     score: Phaser.GameObjects.Text;
-    combo: Phaser.GameObjects.Text;
+    combo: ComboLabel;
     time: Phaser.GameObjects.Text;
     best: Phaser.GameObjects.Text;
-    bar: Phaser.GameObjects.Rectangle;
+    dots: Phaser.GameObjects.Image[];
     demo?: Phaser.GameObjects.Text;
   };
+  /** Last values shown in the HUD: Phaser objects only change when these do. */
+  private shown = { score: -1, secs: -1, best: -1, dots: -1, demo: true };
 
   constructor() {
     super('Game');
@@ -59,10 +74,13 @@ export class GameScene extends Phaser.Scene {
     this.elapsed = 0;
     this.nextBallAt = T.extraBallInterval;
     this.correctHits = 0;
+    this.streak = 0;
     this.hitStopMs = 0;
     this.timeScale = 1;
     this.over = false;
     this.bot = null;
+    this.now = 0;
+    this.shown = { score: -1, secs: -1, best: -1, dots: -1, demo: true };
   }
 
   private get attract() {
@@ -93,24 +111,27 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.world.destroy());
   }
 
+  /** Riso HUD in the quiet top band: black Anton score, pink combo stamp, Space Mono clock/best, next-ball dots. */
   private buildHud(): void {
+    const mono = (x: number, y: number, text: string, size: number, color: string = INK.black) =>
+      this.add.text(x, y, text, risoText(size, color, 'mono')).setFontStyle('bold').setDepth(HUD_DEPTH);
+    const dots: Phaser.GameObjects.Image[] = [];
+    for (let i = 0; i < T.extraBallInterval; i++) {
+      dots.push(this.add.image(dotX(i), HUD.dots.y, RISO_KEYS.dotEmpty).setScale(S * HUD.dots.scale).setDepth(HUD_DEPTH));
+    }
     this.hud = {
-      score: this.add.text(16, 10, '0', textStyle(34)).setDepth(45),
-      combo: this.add.text(18, 52, '', textStyle(18, '#ffd23f', 4)).setDepth(45),
-      time: this.add.text(T.width / 2, 10, '0:00', textStyle(26)).setOrigin(0.5, 0).setDepth(45),
-      best: this.add.text(T.width - 16, 14, 'BEST 0', textStyle(18, '#d8d0ff', 4)).setOrigin(1, 0).setDepth(45),
-      bar: this.add.rectangle(T.width / 2 - 80, 50, 160, 6, 0xffffff, 0.8).setOrigin(0, 0.5).setDepth(45),
+      score: this.add.text(HUD.score.x, HUD.score.y, '0', risoText(HUD.score.size, INK.black)).setOrigin(0, 0).setDepth(HUD_DEPTH),
+      combo: new ComboLabel(this),
+      time: mono(HUD.time.x, HUD.time.y, formatClock(0), HUD.time.size).setOrigin(0.5, 0),
+      best: mono(HUD.best.x, HUD.best.y, bestLabel(0), HUD.best.size).setOrigin(1, 0),
+      dots,
     };
-    this.add.rectangle(T.width / 2, 50, 164, 10, 0x000000, 0.5).setDepth(44);
-    this.add.text(T.width / 2, 58, 'NEXT BALL', textStyle(10, '#ffffff', 3)).setOrigin(0.5, 0).setDepth(45);
+    this.hud.combo.container.setDepth(HUD_DEPTH);
+    mono(HUD.nextCaption.x, HUD.nextCaption.y, 'NEXT BALL', HUD.nextCaption.size).setOrigin(0.5, 0);
 
     if (this.attract) {
-      // Kept in the floor strip so it never hides the balls.
-      this.add.rectangle(T.width / 2, (T.floorY + T.height) / 2 + 2, T.width, T.height - T.floorY - 4, 0x000000, 0.6).setDepth(55);
-      this.hud.demo = this.add
-        .text(T.width / 2, (T.floorY + T.height) / 2 + 2, 'DEMO  ·  PRESS ANY BUTTON TO PLAY!', textStyle(20, '#ffd23f', 5))
-        .setOrigin(0.5)
-        .setDepth(56);
+      // Printed in paper colour on the black floor band (part of the bg), so it never hides the balls.
+      this.hud.demo = mono(HUD.demo.x, HUD.demo.y, 'DEMO · PRESS ANY BUTTON TO PLAY', HUD.demo.size, PAPER).setOrigin(0.5).setDepth(56);
     }
   }
 
@@ -119,7 +140,7 @@ export class GameScene extends Phaser.Scene {
     this.world.on('dash', () => AudioManager.play('dash'));
     this.world.on('comboBreak', (ball: Ball) => {
       AudioManager.play('comboBreak');
-      this.juice.popup(ball.x, ball.y - 50, 'COMBO BREAK', '#ff9f43', 20);
+      this.juice.popup(ball.x, ball.y - 50, 'COMBO BREAK', 'pink', 20);
     });
     this.world.on('floor', (ball: Ball) => this.onDrop(ball));
   }
@@ -127,25 +148,32 @@ export class GameScene extends Phaser.Scene {
   private onHit(e: HitEvent): void {
     if (this.over) return;
     this.hitStopMs = T.hitStopMs;
-    this.juice.burst(e.ball.x, e.ball.bottom, e.player.def.color, e.jumpHit ? 20 : 12);
+    const ink = PLAYER_INK[e.player.id];
+    this.juice.splat(e.ball.x, e.ball.bottom, ink, e.jumpHit ? 'jump' : 'hit');
     AudioManager.play(e.jumpHit ? 'jumpHit' : 'hit');
 
     if (e.correct) {
       this.correctHits++;
+      this.streak++;
       const pts = hitPoints(e.combo, T);
       this.score += pts;
-      this.juice.popup(e.ball.x, e.ball.y - 40, `+${Math.round(pts)}`, e.player.def.colorCss, 22);
+      this.juice.popup(e.ball.x, e.ball.y - 40, `+${Math.round(pts)}`, ink, 22);
       if (this.multiplayer) AudioManager.play('correct');
-      if (e.combo > 0 && e.combo % 10 === 0) {
-        this.juice.banner(`COMBO ${e.combo}!`, '#ffd23f');
+      const milestone = isComboMilestone(e.combo);
+      if (milestone) {
+        this.juice.banner('COMBO', { label: String(e.combo) });
         AudioManager.play('milestone');
       }
+      if (this.multiplayer && niceDue(this.streak, milestone)) this.juice.stamp('NICE', e.player.x, e.player.top - 46, ink, 0.8);
     } else {
+      this.streak = 0;
       AudioManager.play('wrong');
-      this.juice.shakeWrong();
-      this.juice.popup(e.ball.x, e.ball.y - 40, 'WRONG! SPEED UP', '#ff4d4d', 20);
+      // Wrong hit: the hitter's ink jumps out of register (no camera shake: the whole print would move).
+      e.player.jolt(this.now);
+      this.juice.stamp('WRONG', e.player.x, e.player.top - 46);
+      this.juice.popup(e.ball.x, e.ball.y - 40, 'SPEED UP', 'black', 18);
     }
-    if (e.dashPass && this.multiplayer) this.juice.popup(e.player.x, e.player.top - 50, 'PASS!', '#ffffff', 18);
+    if (e.dashPass && this.multiplayer) this.juice.stamp('PASS', e.player.x, e.player.top - 46, ink, 0.8);
   }
 
   private onDrop(ball: Ball): void {
@@ -153,10 +181,11 @@ export class GameScene extends Phaser.Scene {
     this.over = true;
     this.timeScale = T.slowMoScale;
     AudioManager.play('gameover');
-    this.juice.flash(0xff2a2a, 200);
-    this.cameras.main.shake(300, 0.01);
-    this.juice.burst(ball.x, T.floorY, 0xff4d4d, 30);
-    this.juice.banner(this.attract ? 'DROPPED!' : 'GAME OVER', '#ff4d4d', 64);
+    // Big pink ink splat on the floor line under the dropped ball + DROPPED stamp. No flash; one tiny
+    // camera bump (80 ms, 0.003) lands with the stamp so the slam has weight.
+    this.juice.splat(ball.x, T.floorY - 6, 'pink', 'floor', Infinity);
+    this.juice.banner('DROPPED', { holdMs: Infinity, scale: 2.2 });
+    this.cameras.main.shake(80, 0.003);
 
     this.time.delayedCall(T.slowMoMs + 400, () => {
       if (this.attract) {
@@ -175,6 +204,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    this.now = time;
+    this.juice.update(time);
     this.inputMgr.update();
     if (this.attract) {
       if (this.inputMgr.anyPressed() || this.elapsed > T.attractMaxS) {
@@ -199,7 +230,7 @@ export class GameScene extends Phaser.Scene {
         this.nextBallAt += T.extraBallInterval;
         this.world.spawnBall();
         AudioManager.play('spawn');
-        this.juice.banner('+1 BALL!', '#ffffff', 44);
+        this.juice.banner('PLUS_BALL');
       }
     }
 
@@ -209,16 +240,38 @@ export class GameScene extends Phaser.Scene {
     this.updateHud(time);
   }
 
+  /** Touches Phaser objects only when a shown value changes (strings are built only then). */
   private updateHud(time: number): void {
+    const h = this.hud;
+    const sh = this.shown;
     const s = Math.floor(this.score);
-    this.hud.score.setText(`${s}`);
+    if (s !== sh.score) {
+      sh.score = s;
+      h.score.setText(formatScore(s));
+    }
     const c = this.world.combo;
-    this.hud.combo.setText(c > 0 ? `COMBO ${c}   ×${comboMultiplier(c, T).toFixed(1)}` : '');
+    h.combo.set(c, comboMultiplier(c, T), time);
     const secs = Math.floor(this.elapsed);
-    this.hud.time.setText(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
-    this.hud.best.setText(`BEST ${Math.max(this.best, this.attract ? 0 : s)}`);
-    const progress = 1 - (this.nextBallAt - this.elapsed) / T.extraBallInterval;
-    this.hud.bar.setScale(Phaser.Math.Clamp(progress, 0, 1), 1);
-    this.hud.demo?.setAlpha(0.5 + 0.5 * Math.abs(Math.sin(time * 0.004)));
+    if (secs !== sh.secs) {
+      sh.secs = secs;
+      h.time.setText(formatClock(secs));
+    }
+    const best = Math.max(this.best, this.attract ? 0 : s);
+    if (best !== sh.best) {
+      sh.best = best;
+      h.best.setText(bestLabel(best));
+    }
+    const n = dotsFilled(this.elapsed, this.nextBallAt);
+    if (n !== sh.dots) {
+      sh.dots = n;
+      for (let i = 0; i < h.dots.length; i++) h.dots[i].setTexture(i < n ? RISO_KEYS.dot : RISO_KEYS.dotEmpty);
+    }
+    if (h.demo) {
+      const on = demoStripVisible(time);
+      if (on !== sh.demo) {
+        sh.demo = on;
+        h.demo.setVisible(on);
+      }
+    }
   }
 }

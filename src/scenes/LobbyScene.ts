@@ -7,6 +7,7 @@ import { drawStage, textStyle } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
 import { leaderboard } from '../services/Leaderboard';
+import { PLAYER_INK } from '../art/palette';
 import type { Ball } from '../entities/Ball';
 
 const CONTROLS = ['A / D   jump W   dash S', '← / →   jump ↑   dash ↓', 'J / L   jump I   dash K'];
@@ -65,12 +66,12 @@ export class LobbyScene extends Phaser.Scene {
 
     this.world.on('hit', (e: HitEvent) => {
       AudioManager.play(e.jumpHit ? 'jumpHit' : 'hit');
-      this.juice.burst(e.ball.x, e.ball.bottom, e.player.def.color, 8);
-      if (e.dashPass && this.joined.size > 1) this.juice.popup(e.ball.x, e.ball.y - 40, 'PASS!', '#ffffff', 20);
+      this.juice.splat(e.ball.x, e.ball.bottom, PLAYER_INK[e.player.id], 'small');
+      if (e.dashPass && this.joined.size > 1) this.juice.stamp('PASS', e.player.x, e.player.top - 46, PLAYER_INK[e.player.id], 0.8);
     });
     this.world.on('dash', () => AudioManager.play('dash'));
     this.world.on('floor', (ball: Ball) => {
-      this.juice.popup(ball.x, T.floorY - 30, 'oops! (practice)', '#ffffff', 16);
+      this.juice.popup(ball.x, T.floorY - 30, 'oops! (practice)', 'black', 16);
       this.world.removeBall(ball);
       this.time.delayedCall(500, () => this.ensurePracticeBall());
     });
@@ -116,6 +117,7 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    this.juice.update(time);
     this.inputMgr.update();
     const dt = Math.min(delta, 50) / 1000;
 

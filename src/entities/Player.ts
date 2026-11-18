@@ -4,7 +4,7 @@ import { S } from '../config/render';
 import type { PlayerDef } from '../config/players';
 import type { PlayerInput } from '../input/InputManager';
 import { CHAR_R, charShadowScale, charShadowStep } from '../art/characters';
-import { stepSquash } from '../art/motion';
+import { joltOffset, stepSquash } from '../art/motion';
 import { RISO_KEYS } from '../art/textures';
 import { RisoCharacterView, type CharPose } from '../art/views/RisoCharacterView';
 
@@ -44,6 +44,7 @@ export class Player {
   private shownDash = false;
   private shownFace: 1 | -1 = 1;
   private shadowStep = -1;
+  private joltAt = -Infinity;
 
   readonly w = T.playerWidth;
   readonly h = T.playerHeight;
@@ -135,6 +136,11 @@ export class Player {
     this.standingOn = base;
   }
 
+  /** Wrong hit at scene time tMs: the ink layer jumps out of register for JOLT_MS (see joltOffset). */
+  jolt(tMs: number): void {
+    this.joltAt = tMs;
+  }
+
   /**
    * Draw at the feet. `look` = the ball the eyes should follow (null → look forward); tMs drives the boil.
    * Squash/stretch, dash lean and the shadow only update the view when their stepped value changes.
@@ -165,6 +171,7 @@ export class Player {
       p.lookX = face;
       p.lookY = 0;
     }
+    p.extraMisreg = joltOffset(tMs - this.joltAt);
     this.view.pose(p);
     this.view.tick(tMs);
 

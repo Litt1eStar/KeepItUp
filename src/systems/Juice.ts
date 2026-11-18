@@ -1,63 +1,219 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import { textStyle } from '../game/stage';
+import { INK, INK_HEX, type InkName } from '../art/palette';
+import { risoText } from '../art/type';
+import { RISO_KEYS, BOIL_VARIANTS } from '../art/textures';
+import { slamScale } from '../art/motion';
+import { STAMP_INK, stampTint, type StampId } from '../art/ui';
+import { splatNeedsKeyline } from '../art/splat';
+import {
+  BANNER_MS, LOCAL_STAMP_MS, SPLAT_HOLD_STEPS, SPLAT_SIZE_MUL, popupRise, readableInk, splatScale, type SplatSize,
+} from '../art/hud';
+import { StampSlam } from '../art/views/StampSlam';
+import { STAGE_QUIET_Y } from '../art/stage';
 
-/** Game-feel helpers: particles, floating text popups, shakes and flashes. */
+const MULTIPLY = Phaser.BlendModes.MULTIPLY;
+const DEPTH = { floorSplat: 4, splat: 30, popup: 50, stamp: 52, banner: 60 } as const;
+const BANNER_Y = T.height / 2 - 60;
+const POPUP_MIN_Y = STAGE_QUIET_Y + 20;
+
+interface SplatFx {
+  fill: Phaser.GameObjects.Image;
+  line: Phaser.GameObjects.Image;
+  born: number;
+  base: number;
+  hold: number;
+  shown: number;
+}
+
+interface PopupFx {
+  text: Phaser.GameObjects.Text;
+  born: number;
+  y: number;
+  shown: number;
+}
+
+interface StampFx {
+  slam: StampSlam;
+  born: number;
+  life: number;
+  label: Phaser.GameObjects.Text | null;
+  labelScale: number;
+}
+
+export interface BannerOpts {
+  /** Anton text printed under the stamp (e.g. the combo number). */
+  label?: string;
+  ink?: InkName | number;
+  /** ms before it disappears; Infinity = until the scene ends. */
+  holdMs?: number;
+  scale?: number;
+}
+
+/**
+ * Riso game feel: ink splats, stepped Space Mono popups and rubber-stamp slams. Pooled where it
+ * matters (splats and popups fire on every hit); everything is retired once its stepped schedule
+ * ends, so nothing grows with play time. Call update(time) every frame (scene time, ms) — all
+ * effects are timed from it, and spawns made during the frame use that time.
+ */
 export class Juice {
-  private emitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  private now = 0;
+  private readonly splats: SplatFx[] = [];
+  private readonly freeSplats: SplatFx[] = [];
+  private readonly popups: PopupFx[] = [];
+  private readonly freePopups: PopupFx[] = [];
+  private readonly stamps: StampFx[] = [];
+  private currentBanner: StampFx | null = null;
 
-  constructor(private readonly scene: Phaser.Scene) {
-    this.emitter = scene.add
-      .particles(0, 0, 'spark', {
-        speed: { min: 120, max: 340 },
-        angle: { min: 200, max: 340 },
-        lifespan: 500,
-        scale: { start: 0.9 * S, end: 0 },
-        gravityY: 700,
-        blendMode: Phaser.BlendModes.ADD,
-        emitting: false,
-      })
-      .setDepth(30);
-  }
+  constructor(private readonly scene: Phaser.Scene, private readonly rng: () => number = Math.random) {}
 
-  burst(x: number, y: number, color: number, count = 14): void {
-    this.emitter.setParticleTint(color);
-    this.emitter.explode(count, x, y);
-  }
-
-  popup(x: number, y: number, text: string, color = '#ffffff', size = 26, rise = 60): void {
-    const t = this.scene.add
-      .text(x, y, text, textStyle(size, color, 5))
-      .setOrigin(0.5)
-      .setDepth(50);
-    this.scene.tweens.add({ targets: t, y: y - rise, alpha: 0, scale: 1.2, duration: 800, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
-  }
-
-  private currentBanner: Phaser.GameObjects.Text | null = null;
-
-  /** Big center message. A new banner replaces the current one so they never overlap. */
-  banner(text: string, color = '#ffffff', size = 54): void {
-    if (this.currentBanner?.active) {
-      this.scene.tweens.killTweensOf(this.currentBanner);
-      this.currentBanner.destroy();
+  /** Advance every effect to scene time tMs (stepped; Phaser objects only change on a new step). */
+  update(tMs: number): void {
+    this.now = tMs;
+    for (let i = this.splats.length - 1; i >= 0; i--) {
+      const s = this.splats[i];
+      const k = splatScale(tMs - s.born, s.hold);
+      if (k === 0) {
+        s.fill.setVisible(false);
+        s.line.setVisible(false);
+        this.freeSplats.push(s);
+        removeAt(this.splats, i);
+      } else if (k !== s.shown) {
+        s.shown = k;
+        s.fill.setScale(S * s.base * k);
+        s.line.setScale(S * s.base * k);
+      }
     }
-    const t = this.scene.add
-      .text(T.width / 2, T.height / 2 - 60, text, textStyle(size, color, 8))
-      .setOrigin(0.5)
-      .setDepth(60)
-      .setScale(0.3);
-    this.currentBanner = t;
-    this.scene.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.easeOut' });
-    this.scene.tweens.add({ targets: t, alpha: 0, delay: 900, duration: 400, onComplete: () => t.destroy() });
+    for (let i = this.popups.length - 1; i >= 0; i--) {
+      const p = this.popups[i];
+      const dy = popupRise(tMs - p.born);
+      if (Number.isNaN(dy)) {
+        p.text.setVisible(false);
+        this.freePopups.push(p);
+        removeAt(this.popups, i);
+      } else if (dy !== p.shown) {
+        p.shown = dy;
+        p.text.y = p.y + dy;
+      }
+    }
+    for (let i = this.stamps.length - 1; i >= 0; i--) {
+      const st = this.stamps[i];
+      if (tMs - st.born >= st.life) {
+        destroyStamp(st);
+        removeAt(this.stamps, i);
+      } else tickStamp(st, tMs);
+    }
+    const b = this.currentBanner;
+    if (b) {
+      if (tMs - b.born >= b.life) {
+        destroyStamp(b);
+        this.currentBanner = null;
+      } else tickStamp(b, tMs);
+    }
   }
 
-  shakeWrong(): void {
-    this.scene.cameras.main.shake(T.shakeWrongMs, T.shakeWrongIntensity);
+  /**
+   * Ink splat in `ink` at (x, y), MULTIPLY, random variant + rotation; yellow gets its black keyline.
+   * Prints at full size, holds SPLAT_HOLD_STEPS steps (or `holdSteps`), shrinks in two steps, then recycles.
+   * size 'floor' prints under the characters (depth 4), the rest over the action.
+   */
+  splat(x: number, y: number, ink: InkName, size: SplatSize = 'hit', holdSteps = SPLAT_HOLD_STEPS): void {
+    const s = this.freeSplats.pop() ?? this.makeSplat();
+    const v = Math.floor(this.rng() * BOIL_VARIANTS) % BOIL_VARIANTS;
+    const rot = this.rng() * Math.PI * 2;
+    const tint = INK_HEX[ink];
+    const depth = size === 'floor' ? DEPTH.floorSplat : DEPTH.splat;
+    s.born = this.now;
+    s.base = SPLAT_SIZE_MUL[size];
+    s.hold = holdSteps;
+    s.shown = 1;
+    s.fill.setTexture(RISO_KEYS.splat(v)).setTint(tint).setPosition(x, y).setRotation(rot)
+      .setScale(S * s.base).setDepth(depth).setVisible(true);
+    s.line.setTexture(RISO_KEYS.splatLine(v)).setPosition(x, y).setRotation(rot)
+      .setScale(S * s.base).setDepth(depth).setVisible(splatNeedsKeyline(tint));
+    this.splats.push(s);
   }
 
-  flash(color = 0xffffff, ms = 120): void {
-    const c = Phaser.Display.Color.IntegerToColor(color);
-    this.scene.cameras.main.flash(ms, c.red, c.green, c.blue);
+  /** Space Mono bold popup in `ink` (yellow prints black): rises in POPUP_RISE steps, then disappears. */
+  popup(x: number, y: number, text: string, ink: InkName = 'black', size = 18): void {
+    const p = this.freePopups.pop() ?? this.makePopup();
+    p.born = this.now;
+    y = Math.max(POPUP_MIN_Y, y); // balls fly above the screen; keep the text on the paper, under the HUD
+    p.y = y;
+    p.shown = 0;
+    p.text.setText(text).setColor(INK[readableInk(ink)]).setFontSize(size).setPosition(x, y).setVisible(true);
+    this.popups.push(p);
   }
+
+  /** Small stamp slammed near a player (NICE / WRONG / PASS); gone after LOCAL_STAMP_MS. */
+  stamp(id: StampId, x: number, y: number, ink: InkName | number = STAMP_INK[id], scale = 0.9): void {
+    const rot = (this.rng() - 0.5) * 0.4;
+    const slam = new StampSlam(this.scene, id, stampTint(ink), rot, scale);
+    slam.image.setPosition(Phaser.Math.Clamp(x, 70, T.width - 70), Math.max(30, y)).setDepth(DEPTH.stamp);
+    slam.trigger(this.now);
+    slam.tick(this.now);
+    this.stamps.push({ slam, born: this.now, life: LOCAL_STAMP_MS, label: null, labelScale: NaN });
+  }
+
+  /** Big centre stamp (+1 BALL, COMBO n, DROPPED). A new banner replaces the current one so they never overlap. */
+  banner(id: StampId, opts: BannerOpts = {}): void {
+    if (this.currentBanner) destroyStamp(this.currentBanner);
+    const ink = stampTint(opts.ink ?? STAMP_INK[id]);
+    const scale = opts.scale ?? 1.6;
+    const slam = new StampSlam(this.scene, id, ink, -0.06, scale);
+    slam.image.setPosition(T.width / 2, BANNER_Y).setDepth(DEPTH.banner);
+    let label: Phaser.GameObjects.Text | null = null;
+    if (opts.label) {
+      label = this.scene.add.text(T.width / 2 + 6, BANNER_Y + 30 * scale, opts.label, risoText(56, toCss(ink)))
+        .setOrigin(0.5, 0).setRotation(0.05).setBlendMode(MULTIPLY).setDepth(DEPTH.banner);
+    }
+    slam.trigger(this.now);
+    const b: StampFx = { slam, born: this.now, life: opts.holdMs ?? BANNER_MS, label, labelScale: NaN };
+    tickStamp(b, this.now);
+    this.currentBanner = b;
+  }
+
+  /** Live effect objects (for leak checks). */
+  get activeCount(): number {
+    return this.splats.length + this.popups.length + this.stamps.length + (this.currentBanner ? 1 : 0);
+  }
+
+  private makeSplat(): SplatFx {
+    const fill = this.scene.add.image(0, 0, RISO_KEYS.splat(0)).setBlendMode(MULTIPLY);
+    const line = this.scene.add.image(0, 0, RISO_KEYS.splatLine(0)).setBlendMode(MULTIPLY);
+    return { fill, line, born: 0, base: 1, hold: SPLAT_HOLD_STEPS, shown: 1 };
+  }
+
+  private makePopup(): PopupFx {
+    const text = this.scene.add.text(0, 0, '', risoText(18, INK.black, 'mono'))
+      .setFontStyle('bold').setOrigin(0.5).setBlendMode(MULTIPLY).setDepth(DEPTH.popup);
+    return { text, born: 0, y: 0, shown: 0 };
+  }
+}
+
+function tickStamp(st: StampFx, tMs: number): void {
+  st.slam.tick(tMs);
+  if (st.label) {
+    const k = slamScale(tMs - st.born);
+    if (k !== st.labelScale) {
+      st.labelScale = k;
+      st.label.setScale(k);
+    }
+  }
+}
+
+function destroyStamp(st: StampFx): void {
+  st.slam.destroy();
+  st.label?.destroy();
+}
+
+/** Unordered O(1) removal (no splice allocation). */
+function removeAt<T>(arr: T[], i: number): void {
+  arr[i] = arr[arr.length - 1];
+  arr.pop();
+}
+
+function toCss(hex: number): string {
+  return `#${hex.toString(16).padStart(6, '0')}`;
 }
