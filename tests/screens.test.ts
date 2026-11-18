@@ -19,7 +19,8 @@ describe('lobby helpers & layout', () => {
     expect(xs[1]).toBeLessThan(xs[2]);
     expect(xs[2] + TICKET.w).toBeLessThan(LOBBY.receipt.x);
     expect(LOBBY.receipt.x + RECEIPT.w).toBeLessThan(T.width);
-    expect(LOBBY.tickets.y + TICKET.h).toBeLessThan(LOBBY.tickets.charY);
+    expect(LOBBY.tickets.y + TICKET.h).toBeLessThan(LOBBY.tickets.swatchY);
+    expect(LOBBY.tickets.swatchY).toBeLessThan(LOBBY.tickets.charY);
     expect(LOBBY.tickets.charY).toBeLessThan(LOBBY.tickets.statusY);
     expect(LOBBY.tickets.statusY).toBeLessThan(LOBBY.tickets.padY);
     expect(LOBBY.tickets.padY + 16).toBeLessThan(T.floorY);

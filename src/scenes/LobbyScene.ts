@@ -1,16 +1,18 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import { PLAYERS, cyclePlayerCharStyle, cyclePlayerGamepad, type PlayerId } from '../config/players';
+import {
+  CHAR_STYLE_IDS, PLAYERS, cyclePlayerCharStyle, cyclePlayerGamepad, setPlayerCharStyle, type CharStyleId, type PlayerId,
+} from '../config/players';
 import { InputManager } from '../input/InputManager';
 import { World, type BumpEvent, type HitEvent } from '../game/World';
 import { drawStage } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
 import { leaderboard } from '../services/Leaderboard';
-import { INK, INK_HEX, PAPER, playerColor, playerReadableCss } from '../art/palette';
+import { INK, INK_HEX, PAPER, playerColor, playerReadableCss, styleColor } from '../art/palette';
 import { risoText } from '../art/type';
-import { RISO_KEYS, refreshCharacterTextures, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
+import { RISO_KEYS, ensureCharStyleTextures, refreshCharacterTextures, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
 import { TICKET, stampTint } from '../art/ui';
 import { demoStripVisible } from '../art/hud';
 import { slamScale } from '../art/motion';
@@ -23,9 +25,18 @@ import type { Player } from '../entities/Player';
 
 const MULTIPLY = Phaser.BlendModes.MULTIPLY;
 
+interface CharSwatch {
+  style: CharStyleId;
+  fill: Phaser.GameObjects.Image;
+  line: Phaser.GameObjects.Image;
+  sx: number;
+}
+
 interface TicketCard {
   ticket: Phaser.GameObjects.Image;
   slam: StampSlam;
+  swatchFrame: Phaser.GameObjects.Rectangle;
+  swatches: CharSwatch[];
   charText: Phaser.GameObjects.Text;
   status: Phaser.GameObjects.Text;
   pad: Phaser.GameObjects.Text;
@@ -70,6 +81,7 @@ export class LobbyScene extends Phaser.Scene {
     this.juice = new Juice(this);
 
     this.buildCoverHeader();
+    ensureCharStyleTextures(this);
     refreshTicketTextures(this);
     this.buildTickets();
     this.buildBoard();
@@ -149,16 +161,33 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private cycleCharacter(id: PlayerId, delta: 1 | -1): void {
-    cyclePlayerCharStyle(id, delta);
+    const next = cyclePlayerCharStyle(id, delta);
+    this.applyCharacterStyle(id, next);
+  }
+
+  private selectCharacter(id: PlayerId, style: CharStyleId): void {
+    if (PLAYERS[id].charStyle === style) return;
+    setPlayerCharStyle(id, style);
+    this.applyCharacterStyle(id, style);
+  }
+
+  private applyCharacterStyle(id: PlayerId, style: CharStyleId): void {
     refreshCharacterTextures(this, id);
     this.world.refreshPlayerArt(id);
-    const col = playerColor(id);
+    const col = styleColor(style);
     const readable = playerReadableCss(id);
     const card = this.cards[id];
     card.ticket.setTexture(RISO_KEYS.ticket(id));
     card.charText.setText(charSelectPrompt(id, this.joined.has(id))).setColor(readable);
     card.status.setColor(readable);
     card.slam.image.setTint(stampTint(col.baseInk));
+    for (const sw of card.swatches) {
+      const active = sw.style === style;
+      const sc = S * (active ? 0.52 : 0.36);
+      sw.fill.setScale(sc);
+      sw.line.setScale(sc);
+      if (active) card.swatchFrame.setX(sw.sx).setStrokeStyle(2.5, col.hex === INK_HEX.yellow ? INK_HEX.black : col.hex);
+    }
     card.slammedAt = this.now;
     card.lastScale = NaN;
     this.juice.splat(ticketX(id) + 92, LOBBY.tickets.y + 54, col.hex, 'small', 1);
@@ -222,6 +251,34 @@ export class LobbyScene extends Phaser.Scene {
       const slam = new StampSlam(this, 'JOINED', stampTint(col.baseInk), tk.stampRot, tk.stampScale);
       slam.image.setPosition(x + tk.stampOffsetX, tk.y + tk.stampOffsetY).setDepth(7).setVisible(false);
 
+      const frameCol = col.hex === INK_HEX.yellow ? INK_HEX.black : col.hex;
+      const swatchFrame = this.add.rectangle(cx, tk.swatchY, 29, 29).setStrokeStyle(2.5, frameCol).setDepth(5);
+      const swatches: CharSwatch[] = [];
+      for (const style of CHAR_STYLE_IDS) {
+        const active = p.charStyle === style;
+        const sx = cx + (style - 2.5) * tk.swatchGap;
+        const sc = S * (active ? 0.52 : 0.36);
+        if (active) swatchFrame.setX(sx);
+        const fill = this.add
+          .image(sx, tk.swatchY + 11, RISO_KEYS.charStyleFill(style))
+          .setOrigin(0.5, 1)
+          .setScale(sc)
+          .setBlendMode(MULTIPLY)
+          .setDepth(6);
+        const line = this.add
+          .image(sx, tk.swatchY + 11, RISO_KEYS.charStyleLine(style, 0))
+          .setOrigin(0.5, 1)
+          .setScale(sc)
+          .setDepth(6);
+        const hit = this.add.zone(sx, tk.swatchY, 27, 27).setDepth(7).setInteractive({ useHandCursor: true });
+        hit.on('pointerdown', () => {
+          if (this.controlsMenu.isOpen || this.roller.isExiting) return;
+          this.idle = 0;
+          this.selectCharacter(p.id, style);
+        });
+        swatches.push({ style, fill, line, sx });
+      }
+
       const charText = this.add
         .text(cx, tk.charY, charSelectPrompt(p.id, false), risoText(10, readable, 'mono'))
         .setFontStyle('bold')
@@ -254,7 +311,7 @@ export class LobbyScene extends Phaser.Scene {
         this.onRebindKeys();
         AudioManager.play('join');
       });
-      this.cards.push({ ticket, slam, charText, status, pad, lastPad: initialPad, lastVis: true, slammedAt: -Infinity, lastScale: 1 });
+      this.cards.push({ ticket, slam, swatchFrame, swatches, charText, status, pad, lastPad: initialPad, lastVis: true, slammedAt: -Infinity, lastScale: 1 });
     }
   }
 
