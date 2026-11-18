@@ -21,7 +21,7 @@ const FLOOR_Y = 500;
  * per session with `?ball=<20–70>` in the URL. The art, shadows, hit detection, dash-pass
  * aim and bots all derive from this one value.
  */
-const BALL_RADIUS = urlNumber('ball', 40, 20, 70);
+const BALL_RADIUS = urlNumber('ball', 45, 20, 70);
 
 /** Characters are round: one diameter used for both width and height of the body. */
 const PLAYER_SIZE = 56;
