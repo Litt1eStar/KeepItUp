@@ -7,17 +7,16 @@
  *   line   – black wobbly ring + two straight spin ticks (3 boil variants, shared by all balls).
  *            No dots/curves inside the ring: balls must never read as faces. Same size.
  *   shadow – halftone floor shadow, 8 steps from high (sparse, tiny dots) to landing (dense);
- *            pick the step with shadowStep().
+ *            pick the step with shadowStep() (shadow.ts).
  * All ball textures are centered: use origin (0.5, 0.5). Offset the fill by ballMisreg(id).
  */
 import { PLAYERS, type PlayerId } from '../config/players';
 import { INK, INK_ANGLE, PLAYER_INK } from './palette';
 import { circlePoints, fillHalftone, halftoneDots, jitterDots, misregOffset, mottle, speckle, tracePath, wobblePoints } from './riso';
 import { knockOut, strokeWobbly, traceShape } from './draw';
+import { SHADOW_STEPS } from './shadow';
 
 type Ctx = CanvasRenderingContext2D;
-
-export const SHADOW_STEPS = 8;
 
 /** All ball-art sizes for radius r (logical px). */
 export function ballArt(r: number) {
@@ -51,16 +50,6 @@ export function ballLineExtent(r: number): number {
 /** Fixed fill-layer misregistration per ball (runtime: offset the fill image by this). */
 export function ballMisreg(id: PlayerId): { dx: number; dy: number } {
   return misregOffset(200 + id);
-}
-
-/**
- * Shadow step for a ball whose bottom is `heightAboveFloor` px above the floor:
- * at/below the floor → SHADOW_STEPS-1 (dense), at/above `maxHeight` → 0 (sparse). Pure, clamped.
- */
-export function shadowStep(heightAboveFloor: number, maxHeight: number): number {
-  if (!(maxHeight > 0)) return SHADOW_STEPS - 1;
-  const t = 1 - Math.min(1, Math.max(0, heightAboveFloor / maxHeight));
-  return Math.min(SHADOW_STEPS - 1, Math.floor(t * SHADOW_STEPS));
 }
 
 /** Shadow halftone density for step n (0 = ball high, SHADOW_STEPS-1 = about to land). Monotonic. */

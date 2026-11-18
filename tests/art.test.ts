@@ -5,7 +5,8 @@ import {
   CHAR_SHADOW_R, charShadowScale, charShadowStep,
 } from '../src/art/characters';
 import { ARROW_GLYPH_SIZE, ARROW_TEX, arrowExtent, arrowGlyphCenter, arrowTriangle } from '../src/art/arrow';
-import { SHADOW_STEPS, ballArt, ballLineExtent, ballMisreg, ballSpinTicks, shadowDensity, shadowStep, shadowTexSize } from '../src/art/ball';
+import { ballArt, ballLineExtent, ballMisreg, ballSpinTicks, shadowDensity, shadowTexSize } from '../src/art/ball';
+import { SHADOW_STEPS, shadowStep } from '../src/art/shadow';
 import { STAMP_IDS, STAMP_TEXT, formatRank, formatScore } from '../src/art/ui';
 import { SPLAT_SIZE, splatLineExtent, splatMaxExtent, splatShapes } from '../src/art/splat';
 import { PLAY_FIELD, STAGE_QUIET_Y, stageInkCoverage, sunTopY } from '../src/art/stage';

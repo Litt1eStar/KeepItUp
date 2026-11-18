@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pickNextTarget, pickSpawnTarget, resolveHit, entersDangerZone } from '../src/logic/TurnSystem';
 import { comboMultiplier, hitPoints, timePoints } from '../src/logic/Scoring';
 import { landingX, solveDashPass } from '../src/logic/dashPass';
+import { pickLookTarget } from '../src/logic/lookTarget';
 import { LocalLeaderboard, type KeyValueStore } from '../src/services/Leaderboard';
 import { TUNING } from '../src/config/tuning';
 
@@ -116,5 +117,28 @@ describe('LocalLeaderboard', () => {
     const store = memStore();
     store.setItem('keepitup.leaderboard.v1', '{not json');
     expect(await new LocalLeaderboard(store).top()).toEqual([]);
+  });
+});
+
+describe('pickLookTarget', () => {
+  const out = { x: 0, y: 0 };
+  it('follows the lowest ball targeting the player, even if another ball is nearer', () => {
+    const balls = [
+      { x: 105, y: 400, target: 1 }, // nearest, but not ours
+      { x: 800, y: 150, target: 0 },
+      { x: 600, y: 300, target: 0 }, // lowest of ours
+    ];
+    expect(pickLookTarget(100, 470, 0, balls, out)).toEqual({ x: 600, y: 300 });
+  });
+  it('falls back to the nearest ball when none targets the player', () => {
+    const balls = [
+      { x: 700, y: 200, target: 2 },
+      { x: 150, y: 380, target: 1 },
+    ];
+    expect(pickLookTarget(100, 470, 0, balls, out)).toEqual({ x: 150, y: 380 });
+  });
+  it('returns null with no balls, and reuses the out object (no allocation)', () => {
+    expect(pickLookTarget(100, 470, 0, [], out)).toBeNull();
+    expect(pickLookTarget(0, 0, 0, [{ x: 1, y: 2, target: 0 }], out)).toBe(out);
   });
 });

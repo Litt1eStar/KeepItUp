@@ -3,7 +3,7 @@ import { S } from '../../config/render';
 import { TUNING as T } from '../../config/tuning';
 import { PLAYERS, type PlayerId } from '../../config/players';
 import { CHAR_R } from '../../art/characters';
-import { SHADOW_STEPS } from '../../art/ball';
+import { SHADOW_STEPS } from '../../art/shadow';
 import { RISO_KEYS } from '../../art/textures';
 import { MOTION_STEP_MS, facingToward, idlePose, joltOffset, quantizeTime, type IdlePose } from '../../art/motion';
 import { ballInkAt, demoBallPos, demoWrongHit } from '../../art/styleTileMotion';

@@ -15,7 +15,7 @@ import { PLAYERS, type PlayerId } from '../config/players';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE, PLAYER_INK } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, seeded, speckle, tracePath, wobblePoints } from './riso';
-import { SHADOW_STEPS, shadowStep } from './ball';
+import { SHADOW_STEPS, shadowStep } from './shadow';
 import { handLine, inkLayer, knockOut, strokeWobbly, traceShape, type Pt } from './draw';
 
 type Ctx = CanvasRenderingContext2D;

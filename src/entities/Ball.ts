@@ -81,8 +81,8 @@ export class Ball {
     // Floating spawn telegraph: stepped scale pulse (no alpha fades).
     v.setScaleMul(this.floatTime > 0 ? spawnPulse(time) : 1);
     v.tick(time);
-    // Fall warning: halftone shadow gets denser as the ball drops, pink below the danger line.
-    v.updateShadow(this.x, this.bottom);
+    // Fall warning: halftone shadow gets denser as the ball drops, pink while the ball is in danger.
+    v.updateShadow(this.x, this.bottom, this.inDanger);
   }
 
   destroy(): void {

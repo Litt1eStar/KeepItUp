@@ -71,11 +71,14 @@ export class RisoBallView {
     }
   }
 
-  /** Place the shadow under x and pick normal/danger + density from the ball's bottom edge. */
-  updateShadow(x: number, ballBottomY: number): void {
+  /**
+   * Place the shadow under x and pick density from the ball's bottom edge. `danger` (e.g. Ball.inDanger)
+   * selects the pink version; omitted → bottom below the danger line.
+   */
+  updateShadow(x: number, ballBottomY: number, danger?: boolean): void {
     const sh = this.shadow;
     if (!sh) return;
-    const choice = shadowChoice(ballBottomY);
+    const choice = danger === undefined ? shadowChoice(ballBottomY) : shadowChoice(ballBottomY, danger);
     if (choice.key !== this.shadowKey) {
       this.shadowKey = choice.key;
       sh.setTexture(choice.key);

@@ -3,8 +3,7 @@ import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
 import type { PlayerDef } from '../config/players';
 import type { PlayerInput } from '../input/InputManager';
-import { CHAR_R, CHAR_SHADOW_R, charShadowScale, charShadowStep } from '../art/characters';
-import { shadowTexSize } from '../art/ball';
+import { CHAR_R, charShadowScale, charShadowStep } from '../art/characters';
 import { stepSquash } from '../art/motion';
 import { RISO_KEYS } from '../art/textures';
 import { RisoCharacterView, type CharPose } from '../art/views/RisoCharacterView';
@@ -55,9 +54,9 @@ export class Player {
     this.prevY = this.y;
     this.view = new RisoCharacterView(scene, def.id);
     this.view.container.setPosition(x, this.y).setDepth(10);
-    // halftone contact shadow: bottom edge on the floor line, under the character's feet
-    this.shadow = scene.add.image(x, T.floorY - shadowTexSize(CHAR_SHADOW_R).h / 2, RISO_KEYS.charShadow(0))
-      .setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(3);
+    // halftone contact shadow: bottom edge pinned to the floor line at every scale
+    this.shadow = scene.add.image(x, T.floorY, RISO_KEYS.charShadow(0))
+      .setOrigin(0.5, 1).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(3);
   }
 
   get id() {

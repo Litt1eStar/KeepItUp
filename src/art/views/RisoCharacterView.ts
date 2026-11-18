@@ -49,7 +49,7 @@ export class RisoCharacterView {
   setSpeedlines(on: boolean): void {
     if (on && !this.speedlines) {
       this.speedlines = this.scene.add.image(0, -CHAR_R, RISO_KEYS.speedlines)
-        .setScale(S * 1.1).setBlendMode(Phaser.BlendModes.MULTIPLY);
+        .setScale(S * 1.1).setBlendMode(Phaser.BlendModes.MULTIPLY).setFlipY(this.variant === 1);
       this.container.addAt(this.speedlines, 0);
       this.placeSpeedlines();
     }

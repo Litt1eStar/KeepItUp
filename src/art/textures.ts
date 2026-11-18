@@ -2,8 +2,8 @@
  * Registers every riso texture with Phaser at boot. Textures are drawn at RS× resolution
  * (display images with .setScale(S)). All keys are prefixed `riso:`; use RISO_KEYS, not strings.
  *
- * Origins: characters (fill/line) (0.5, 1) — see CHAR_TEX; pupil, balls, shadows, character shadows,
- * arrows, off-screen indicators, stamps, splats, splat keylines, dots (0.5, 0.5); speedlines (1, 0.5) at the character's back; bg/ticket/receipt (0, 0).
+ * Origins: characters (fill/line) (0.5, 1) — see CHAR_TEX; character shadows (0.5, 1) on the floor line;
+ * pupil, balls, ball shadows, arrows, off-screen indicators, stamps, splats, splat keylines, dots (0.5, 0.5); speedlines (1, 0.5) at the character's back (mirrored to (0, 0.5) facing left); bg/ticket/receipt (0, 0).
  */
 import type Phaser from 'phaser';
 import { PLAYERS, type PlayerId } from '../config/players';
@@ -11,8 +11,9 @@ import { RS } from '../config/render';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE } from './palette';
 import { CHAR_SHADOW_R, CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
-import { SHADOW_STEPS, ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
+import { ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
 import { drawStage } from './stage';
+import { SHADOW_STEPS } from './shadow';
 import { DOT_TEX, RECEIPT, STAMP_IDS, TICKET, drawDot, drawReceipt, drawStamp, drawTicket, stampSize, type StampId } from './ui';
 import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
 import { ARROW_TEX, drawArrow } from './arrow';

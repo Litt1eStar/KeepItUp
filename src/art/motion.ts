@@ -1,5 +1,5 @@
 /** Reusable, Phaser-free runtime timing for the riso look: stepped, snappy, never smooth. */
-import { SHADOW_STEPS, shadowStep } from './ball';
+import { SHADOW_STEPS, shadowStep } from './shadow';
 import { BOIL_VARIANTS, RISO_KEYS } from './textures';
 import { TUNING as T } from '../config/tuning';
 import type { PlayerId } from '../config/players';
@@ -40,10 +40,13 @@ const CHOICES: ShadowChoice[][] = [false, true].map((danger) =>
   })),
 );
 
-/** Floor-shadow texture for a ball whose bottom is at `ballBottomY`. Danger exactly when below dangerLineY. No allocation. */
-export function shadowChoice(ballBottomY: number): ShadowChoice {
+/**
+ * Floor-shadow texture for a ball whose bottom is at `ballBottomY`. `danger` picks the pink version;
+ * gameplay passes Ball.inDanger, demos default to "bottom below dangerLineY". No allocation.
+ */
+export function shadowChoice(ballBottomY: number, danger = ballBottomY > T.dangerLineY): ShadowChoice {
   const step = shadowStep(T.floorY - ballBottomY, T.shadowMaxHeight);
-  return CHOICES[ballBottomY > T.dangerLineY ? 1 : 0][step];
+  return CHOICES[danger ? 1 : 0][step];
 }
 
 /** Facing toward a target x. */

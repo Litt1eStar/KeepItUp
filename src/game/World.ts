@@ -9,6 +9,7 @@ import { Ball } from '../entities/Ball';
 import type { InputSource } from '../input/InputManager';
 import { entersDangerZone, pickNextTarget, pickSpawnTarget, resolveHit } from '../logic/TurnSystem';
 import { solveDashPass } from '../logic/dashPass';
+import { pickLookTarget } from '../logic/lookTarget';
 
 export interface HitEvent {
   ball: Ball;
@@ -240,7 +241,7 @@ export class World extends Phaser.Events.EventEmitter {
   }
 
   render(dt: number, time: number): void {
-    for (const p of this.players) p.render(dt, time, this.lookTargetFor(p));
+    for (const p of this.players) p.render(dt, time, pickLookTarget(p.x, p.y - p.h / 2, p.id, this.balls, this.look));
     for (const b of this.balls) {
       b.render(dt, time);
       // Off-screen indicator pinned to the top edge when a ball flies above the screen.
@@ -268,29 +269,6 @@ export class World extends Phaser.Events.EventEmitter {
       arrow.setVisible(on);
       if (on) arrow.setPosition(p.x, p.top - 22 + bob);
     }
-  }
-
-  /**
-   * What player p's eyes follow (render only; no allocation): the lowest ball targeting p,
-   * else the nearest ball, else null (look forward).
-   */
-  private lookTargetFor(p: Player): LookTarget | null {
-    let pick: Ball | null = null;
-    for (const b of this.balls) if (b.target === p.id && (!pick || b.y > pick.y)) pick = b;
-    if (!pick) {
-      let best = Infinity;
-      for (const b of this.balls) {
-        const d = (b.x - p.x) ** 2 + (b.y - p.y) ** 2;
-        if (d < best) {
-          best = d;
-          pick = b;
-        }
-      }
-    }
-    if (!pick) return null;
-    this.look.x = pick.x;
-    this.look.y = pick.y;
-    return this.look;
   }
 
   destroy(): void {

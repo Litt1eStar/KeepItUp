@@ -4,7 +4,7 @@ import {
   quantizeTime, shadowChoice, slamScale, spinAngle, arrowBob, arrowVisible, offscreenScale, spawnPulse, stepSquash,
 } from '../src/art/motion';
 import { INK_CYCLE_MS, ballInkAt, demoBallPos, demoWrongHit, dotsFilledAt, periodIndex } from '../src/art/styleTileMotion';
-import { SHADOW_STEPS } from '../src/art/ball';
+import { SHADOW_STEPS } from '../src/art/shadow';
 import { allRisoKeys } from '../src/art/textures';
 import { STAMP_IDS, STAMP_INK, STAMP_INKS_ALLOWED, STAMP_INK_FALLBACK, stampTint } from '../src/art/ui';
 import { splatNeedsKeyline } from '../src/art/splat';
@@ -173,5 +173,17 @@ describe('play-field runtime timing', () => {
     expect(Math.min(...vals)).toBe(1);
     expect(stepSquash(0.013)).toBe(0);
     expect(stepSquash(-0.25)).toBe(-0.25);
+  });
+});
+
+describe('shadowChoice danger flag', () => {
+  it('an explicit danger flag overrides the position test (gameplay passes Ball.inDanger)', () => {
+    const below = T.dangerLineY + 10;
+    const above = T.dangerLineY - 10;
+    expect(shadowChoice(below, false).danger).toBe(false);
+    expect(shadowChoice(below, false).key).toMatch(/^riso:shadow:\d$/);
+    expect(shadowChoice(above, true).danger).toBe(true);
+    expect(shadowChoice(below, false).step).toBe(shadowChoice(below).step);
+    expect(shadowChoice(below)).toBe(shadowChoice(below, true));
   });
 });
