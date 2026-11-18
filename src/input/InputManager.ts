@@ -19,10 +19,19 @@ export interface InputSource {
 type KeySet = { left: Phaser.Input.Keyboard.Key; right: Phaser.Input.Keyboard.Key; jump: Phaser.Input.Keyboard.Key; dash: Phaser.Input.Keyboard.Key };
 
 const STICK_DEADZONE = 0.35;
-// Standard gamepad mapping: 0=A, 1=B, 2=X, 3=Y, 5=RB, 9=Start, 12-15=d-pad
+// Standard gamepad mapping: 0=A, 1=B, 2=X, 3=Y, 5=RB, 8=Back/Select, 9=Start, 12-15=d-pad
 const PAD_JUMP = [0];
 const PAD_DASH = [1, 2, 5];
+const PAD_CHAR = [3];
+const PAD_BACK = [1, 8];
 const PAD_START = [9];
+
+export interface MenuDirEdges {
+  left: boolean;
+  right: boolean;
+  up: boolean;
+  down: boolean;
+}
 
 /**
  * Merges keyboard + gamepads into PlayerInput per player.
@@ -36,9 +45,22 @@ export class InputManager implements InputSource {
   private latched = new Set<Phaser.Input.Keyboard.Key>();
   private prevJump = [false, false, false];
   private prevDash = [false, false, false];
+  private prevLeft = [false, false, false];
+  private prevRight = [false, false, false];
+  private prevPadChar = [false, false, false];
+  private leftEdge = [false, false, false];
+  private rightEdge = [false, false, false];
+  private padCharEdge = [false, false, false];
   private prevStart = false;
   private prevAny = false;
+  private prevMenuDir: MenuDirEdges = { left: false, right: false, up: false, down: false };
+  private menuDirEdges: MenuDirEdges = { left: false, right: false, up: false, down: false };
+  private prevPadConfirm = false;
+  private padConfirmEdge = false;
+  private prevPadBack = false;
+  private padBackEdge = false;
   private current: PlayerInput[] = [EMPTY_INPUT, EMPTY_INPUT, EMPTY_INPUT];
+  private padStartEdgeNow = false;
   private startPressedNow = false;
   private anyPressedNow = false;
 
@@ -82,8 +104,15 @@ export class InputManager implements InputSource {
   /** Drop any buffered key presses (e.g. when returning from the pause menu). */
   clearLatched(): void {
     this.latched.clear();
+    this.padStartEdgeNow = false;
     this.startPressedNow = false;
     this.anyPressedNow = false;
+    this.leftEdge = [false, false, false];
+    this.rightEdge = [false, false, false];
+    this.padCharEdge = [false, false, false];
+    this.menuDirEdges = { left: false, right: false, up: false, down: false };
+    this.padConfirmEdge = false;
+    this.padBackEdge = false;
     this.current = [EMPTY_INPUT, EMPTY_INPUT, EMPTY_INPUT];
   }
 
@@ -134,29 +163,100 @@ export class InputManager implements InputSource {
       const kbDash = this.consume(k.dash);
       const padJump = InputManager.btn(pad, PAD_JUMP);
       const padDash = InputManager.btn(pad, PAD_DASH);
+      const padChar = InputManager.btn(pad, PAD_CHAR);
       const jumpPressed = kbJump || (padJump && !this.prevJump[def.id]);
       const dashPressed = kbDash || (padDash && !this.prevDash[def.id]);
       const jumpHeld = k.jump.isDown || padJump || kbJump;
 
+      this.leftEdge[def.id] = left && !this.prevLeft[def.id];
+      this.rightEdge[def.id] = right && !this.prevRight[def.id];
+      this.padCharEdge[def.id] = padChar && !this.prevPadChar[def.id];
+
       this.current[def.id] = { left, right, jumpHeld, jumpPressed, dashPressed };
       this.prevJump[def.id] = padJump;
       this.prevDash[def.id] = padDash;
-      anyHeld ||= left || right || jumpHeld || k.dash.isDown || padDash;
-      anyEdge ||= jumpPressed || dashPressed;
+      this.prevLeft[def.id] = left;
+      this.prevRight[def.id] = right;
+      this.prevPadChar[def.id] = padChar;
+      anyHeld ||= left || right || jumpHeld || k.dash.isDown || padDash || padChar;
+      anyEdge ||= jumpPressed || dashPressed || this.padCharEdge[def.id];
     }
 
-    const padStart = this.scene.input.gamepad?.getAll().some((p) => InputManager.btn(p, PAD_START)) ?? false;
+    const allPads = this.scene.input.gamepad?.getAll() ?? [];
+    const padStart = allPads.some((p) => InputManager.btn(p, PAD_START));
     const kbStart = this.startKeys.map((k) => this.consume(k)).some(Boolean);
     this.startPressedNow = kbStart || (padStart && !this.prevStart);
+
+    const gLeft = allPads.some((p) => p.left || p.leftStick.x < -STICK_DEADZONE);
+    const gRight = allPads.some((p) => p.right || p.leftStick.x > STICK_DEADZONE);
+    const gUp = allPads.some((p) => p.up || p.leftStick.y < -STICK_DEADZONE);
+    const gDown = allPads.some((p) => p.down || p.leftStick.y > STICK_DEADZONE);
+    const gConfirm = allPads.some((p) => InputManager.btn(p, PAD_JUMP));
+    const gBack = allPads.some((p) => InputManager.btn(p, PAD_BACK));
+
+    this.menuDirEdges = {
+      left: gLeft && !this.prevMenuDir.left,
+      right: gRight && !this.prevMenuDir.right,
+      up: gUp && !this.prevMenuDir.up,
+      down: gDown && !this.prevMenuDir.down,
+    };
+    this.prevMenuDir = { left: gLeft, right: gRight, up: gUp, down: gDown };
+
+    this.padConfirmEdge = gConfirm && !this.prevPadConfirm;
+    this.prevPadConfirm = gConfirm;
+    this.padBackEdge = gBack && !this.prevPadBack;
+    this.prevPadBack = gBack;
+
+    this.padStartEdgeNow = padStart && !this.prevStart;
     this.prevStart = padStart;
 
-    anyHeld ||= padStart || this.startKeys.some((k) => k.isDown);
-    this.anyPressedNow = anyEdge || this.startPressedNow || (anyHeld && !this.prevAny);
+    anyHeld ||= padStart || gLeft || gRight || gUp || gDown || gConfirm || gBack || this.startKeys.some((k) => k.isDown);
+    this.anyPressedNow =
+      anyEdge ||
+      this.startPressedNow ||
+      this.padConfirmEdge ||
+      this.padBackEdge ||
+      (anyHeld && !this.prevAny);
     this.prevAny = anyHeld;
   }
 
   get(id: PlayerId): PlayerInput {
     return this.current[id];
+  }
+
+  /** Rising edge of Left input for player `id` (used for lobby character selection). */
+  playerLeftEdge(id: PlayerId): boolean {
+    return this.leftEdge[id];
+  }
+
+  /** Rising edge of Right input for player `id` (used for lobby character selection). */
+  playerRightEdge(id: PlayerId): boolean {
+    return this.rightEdge[id];
+  }
+
+  /** Rising edge of Gamepad Y button for player `id`. */
+  padCharPressed(id: PlayerId): boolean {
+    return this.padCharEdge[id];
+  }
+
+  /** Rising edge of D-pad / Left Stick directions across any connected gamepad (for menus). */
+  padMenuDir(): MenuDirEdges {
+    return this.menuDirEdges;
+  }
+
+  /** Rising edge of Gamepad A button across any connected gamepad (for menus). */
+  padConfirmPressed(): boolean {
+    return this.padConfirmEdge;
+  }
+
+  /** Rising edge of Gamepad B / Back button across any connected gamepad (for menus). */
+  padBackPressed(): boolean {
+    return this.padBackEdge;
+  }
+
+  /** Rising edge of Gamepad Start button only (for pausing without triggering on keyboard Space/Enter). */
+  padStartPressed(): boolean {
+    return this.padStartEdgeNow;
   }
 
   /** Space / Enter / gamepad Start pressed this frame. */

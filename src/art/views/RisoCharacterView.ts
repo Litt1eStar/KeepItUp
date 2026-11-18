@@ -67,6 +67,15 @@ export class RisoCharacterView {
     this.container.destroy();
   }
 
+  /** Reload character fill/line textures & pupil scale after switching character variant. */
+  refreshStyle(): void {
+    this.fill.setTexture(RISO_KEYS.charFill(this.id));
+    this.line.setTexture(RISO_KEYS.charLine(this.id, this.variant));
+    const ps = pupilScale(this.id) * S;
+    for (const pupil of this.pupils) pupil.setScale(ps);
+    this.pose({ face: this.face, lookX: 0, lookY: 0 });
+  }
+
   /** Apply facing, look direction, misregistration (+ extra) and blink. */
   pose(p: CharPose): void {
     const extra = p.extraMisreg ?? ZERO;

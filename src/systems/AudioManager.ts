@@ -1,6 +1,21 @@
 import Phaser from 'phaser';
 
-export type SfxName = 'hit' | 'correct' | 'wrong' | 'jumpHit' | 'dash' | 'spawn' | 'gameover' | 'join' | 'comboBreak' | 'milestone' | 'select';
+export type SfxName =
+  | 'hit'
+  | 'correct'
+  | 'wrong'
+  | 'jumpHit'
+  | 'dash'
+  | 'spawn'
+  | 'gameover'
+  | 'join'
+  | 'comboBreak'
+  | 'milestone'
+  | 'select'
+  | 'bump'
+  | 'clack'
+  | 'trampoline'
+  | 'tick';
 
 /**
  * Placeholder SFX synthesized with WebAudio — no asset files, works offline.
@@ -28,6 +43,15 @@ export class AudioManager {
       case 'join': return tone(ctx, 500, 0.12, 'square', 0.12, 800);
       case 'select': return tone(ctx, 700, 0.04, 'square', 0.08);
       case 'comboBreak': return tone(ctx, 400, 0.18, 'triangle', 0.18, 200);
+      case 'bump':
+        tone(ctx, 160, 0.11, 'triangle', 0.28, 70);
+        return noise(ctx, 0.06, 0.12);
+      case 'clack':
+        return tone(ctx, 920, 0.05, 'triangle', 0.18, 620);
+      case 'trampoline':
+        return tone(ctx, 280, 0.16, 'sine', 0.24, 780);
+      case 'tick':
+        return tone(ctx, 880, 0.05, 'square', 0.09, 980);
       case 'milestone':
         [523, 659, 784, 1047].forEach((f, i) => tone(ctx, f, 0.1, 'square', 0.1, undefined, i * 0.07));
         return;

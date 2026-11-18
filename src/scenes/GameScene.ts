@@ -66,10 +66,11 @@ export class GameScene extends Phaser.Scene {
     time: Phaser.GameObjects.Text;
     best: Phaser.GameObjects.Text;
     dots: Phaser.GameObjects.Image[];
+    nextCaption: Phaser.GameObjects.Text;
     demo?: Phaser.GameObjects.Text;
   };
   /** Last values shown in the HUD: Phaser objects only change when these do. */
-  private shown = { score: -1, secs: -1, best: -1, dots: -1, demo: true };
+  private shown = { score: -1, secs: -1, best: -1, dots: -1, demo: true, warnSecs: -1 };
 
   constructor() {
     super('Game');
@@ -88,7 +89,7 @@ export class GameScene extends Phaser.Scene {
     this.bot = null;
     this.pauseMenu = null;
     this.now = 0;
-    this.shown = { score: -1, secs: -1, best: -1, dots: -1, demo: true };
+    this.shown = { score: -1, secs: -1, best: -1, dots: -1, demo: true, warnSecs: -1 };
   }
 
   private get attract() {
@@ -142,15 +143,16 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < T.extraBallInterval; i++) {
       dots.push(this.add.image(dotX(i), HUD.dots.y, RISO_KEYS.dotEmpty).setScale(S * HUD.dots.scale).setDepth(HUD_DEPTH));
     }
+    const nextCaption = mono(HUD.nextCaption.x, HUD.nextCaption.y, 'NEXT BALL', HUD.nextCaption.size).setOrigin(0.5, 0);
     this.hud = {
       score: this.add.text(HUD.score.x, HUD.score.y, '0', risoText(HUD.score.size, INK.black)).setOrigin(0, 0).setDepth(HUD_DEPTH),
       combo: new ComboLabel(this),
       time: mono(HUD.time.x, HUD.time.y, formatClock(0), HUD.time.size).setOrigin(0.5, 0),
       best: mono(HUD.best.x, HUD.best.y, bestLabel(0), HUD.best.size).setOrigin(1, 0),
       dots,
+      nextCaption,
     };
     this.hud.combo.container.setDepth(HUD_DEPTH);
-    mono(HUD.nextCaption.x, HUD.nextCaption.y, 'NEXT BALL', HUD.nextCaption.size).setOrigin(0.5, 0);
 
     if (this.attract) {
       // Printed in paper colour on the black floor band (part of the bg), so it never hides the balls.
@@ -167,11 +169,11 @@ export class GameScene extends Phaser.Scene {
       this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
     });
     this.world.on('bump', (e: BumpEvent) => {
-      AudioManager.play('hit');
+      AudioManager.play(e.kind === 'trampoline' ? 'trampoline' : 'bump');
       this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'hit', 2);
     });
     this.world.on('ballCollide', (e: BumpEvent) => {
-      AudioManager.play('hit');
+      AudioManager.play('clack');
       this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'small', 2);
     });
     this.world.on('targetHit', (e: TargetHitEvent) => this.onTargetHit(e));
@@ -267,10 +269,14 @@ export class GameScene extends Phaser.Scene {
     this.now = time;
     this.roller.tick(time);
     if (this.roller.isExiting) return;
-    this.pauseMenu?.tick(time);
-    if (this.pauseMenu?.isOpen) return;
-    this.juice.update(time);
     this.inputMgr.update();
+    this.pauseMenu?.tick(time, this.inputMgr);
+    if (this.pauseMenu?.isOpen) return;
+    if (!this.attract && !this.over && this.inputMgr.padStartPressed()) {
+      this.pauseMenu?.show(time);
+      return;
+    }
+    this.juice.update(time);
     if (this.attract) {
       if (this.inputMgr.anyPressed() || this.elapsed > T.attractMaxS) {
         this.roller.exitTo('Lobby');
@@ -329,6 +335,17 @@ export class GameScene extends Phaser.Scene {
     if (n !== sh.dots) {
       sh.dots = n;
       for (let i = 0; i < h.dots.length; i++) h.dots[i].setTexture(i < n ? RISO_KEYS.dot : RISO_KEYS.dotEmpty);
+    }
+    const remSecs = this.over ? 0 : Math.ceil(this.nextBallAt - this.elapsed);
+    const warn = remSecs >= 1 && remSecs <= 3 ? remSecs : 0;
+    if (warn !== sh.warnSecs) {
+      sh.warnSecs = warn;
+      if (warn > 0) {
+        AudioManager.play('tick');
+        h.nextCaption.setText(`NEXT BALL IN ${warn}...`).setColor(INK.pink).setScale(1.15);
+      } else {
+        h.nextCaption.setText('NEXT BALL').setColor(INK.black).setScale(1);
+      }
     }
     if (h.demo) {
       const on = demoStripVisible(time);

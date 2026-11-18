@@ -27,6 +27,7 @@ export interface BumpEvent {
   x: number;
   y: number;
   ink: PlayerId;
+  kind?: 'bump' | 'trampoline';
 }
 
 export interface TargetHitEvent {
@@ -148,7 +149,7 @@ export class World extends Phaser.Events.EventEmitter {
           rider.vy = -T.stackLaunchVy;
           rider.grounded = false;
           rider.standingOn = null;
-          this.emit('bump', { x: rider.x, y: p.top, ink: p.id } satisfies BumpEvent);
+          this.emit('bump', { x: rider.x, y: p.top, ink: p.id, kind: 'trampoline' } satisfies BumpEvent);
         }
       }
       if (dashed) this.emit('dash', p);
@@ -175,6 +176,7 @@ export class World extends Phaser.Events.EventEmitter {
             x: (a.x + b.x) / 2,
             y: Math.min(a.y, b.y) - 28,
             ink: a.dashing ? a.id : b.id,
+            kind: 'bump',
           } satisfies BumpEvent);
         }
       }

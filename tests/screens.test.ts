@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   GAME_OVER, LOBBY, MENU_ITEMS, MENU_LAYOUT, PAUSE_ITEMS, PAUSE_LAYOUT, PROMPT_BLINK_ON, PROMPT_BLINK_PERIOD, REPORT_LINE_STEP_MS, ROLLER_STEP_MS, ROLLER_STEPS,
-  boardCountdownLabel, entryCountdownLabel, formatDotRow, joinPrompt, menuItemY, padLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
+  boardCountdownLabel, entryCountdownLabel, formatDotRow, joinPrompt, menuItemY, padLabel, padSlotLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
   reportLinesVisible, rollerCoverWidth, rollerExitWidth, slotRotation, slotX, teamLabel, ticketX,
 } from '../src/art/screens';
 import { STEP_MS } from '../src/art/motion';
 import { LETTER_BOX, RECEIPT, TICKET } from '../src/art/ui';
 import { TUNING as T } from '../src/config/tuning';
 import {
-  DEFAULT_KEYS, PLAYERS, eventToKeyName, formatKeyName, formatTicketControls, resetPlayerKeys, setPlayerKey, type PlayerId,
+  CHAR_STYLE_COUNT, DEFAULT_GAMEPADS, DEFAULT_KEYS, PLAYERS, cyclePlayerCharStyle, cyclePlayerGamepad, eventToKeyName, formatKeyName,
+  formatTicketControls, resetPlayerCharStyles, resetPlayerKeys, setPlayerKey, type PlayerId,
 } from '../src/config/players';
 
 describe('lobby helpers & layout', () => {
@@ -33,7 +34,7 @@ describe('lobby helpers & layout', () => {
     expect(joinPrompt(0, true)).toBe(joinPrompt(2, true));
     expect(padLabel(null, false)).toBe('KEYBOARD');
     expect(padLabel(0, true)).toBe('GAMEPAD 1 READY');
-    expect(padLabel(1, false)).toBe('KEYBOARD (NO PAD)');
+    expect(padLabel(1, false)).toBe('PAD 2 (NO PAD)');
   });
 
   it('step-blinks unjoined prompts in whole STEP_MS ticks with bounded duty cycle', () => {
@@ -165,10 +166,37 @@ describe('pause menu & key rebinding', () => {
       expect(pauseCtrlColX(id)).toBeGreaterThan(PAUSE_LAYOUT.ctrlRowLabelX);
       expect(pauseCtrlColX(id)).toBeLessThan(c.x + c.w);
     }
-    for (let r = 0; r < 4; r++) {
+    for (let r = 0; r < 5; r++) {
       expect(pauseCtrlRowY(r)).toBeGreaterThan(PAUSE_LAYOUT.ctrlHeaderY);
       expect(pauseCtrlRowY(r)).toBeLessThan(PAUSE_LAYOUT.ctrlBtnY);
     }
+  });
+
+  it('cycles character styles and swaps gamepad assignments cleanly', () => {
+    try {
+      expect(padSlotLabel(null)).toBe('KEY ONLY');
+      expect(padSlotLabel(0)).toBe('PAD 1');
+      expect(padSlotLabel(1)).toBe('PAD 2');
+
+      expect(cyclePlayerCharStyle(0, 1)).toBe(1);
+      expect(cyclePlayerCharStyle(0, -1)).toBe(0);
+      expect(cyclePlayerCharStyle(0, -1)).toBe(CHAR_STYLE_COUNT - 1);
+      resetPlayerCharStyles();
+      expect(PLAYERS[0].charStyle).toBe(0);
+      expect(PLAYERS[1].charStyle).toBe(1);
+      expect(PLAYERS[2].charStyle).toBe(2);
+
+      // P1 starts as KEY ONLY (null); cycling assigns PAD 1 (0) and swaps P2 to null
+      expect(cyclePlayerGamepad(0)).toBe(0);
+      expect(PLAYERS[0].gamepadIndex).toBe(0);
+      expect(PLAYERS[1].gamepadIndex).toBeNull();
+    } finally {
+      resetPlayerCharStyles();
+      resetPlayerKeys(false);
+    }
+    expect(PLAYERS[0].gamepadIndex).toBe(DEFAULT_GAMEPADS[0]);
+    expect(PLAYERS[1].gamepadIndex).toBe(DEFAULT_GAMEPADS[1]);
+    expect(PLAYERS[2].gamepadIndex).toBe(DEFAULT_GAMEPADS[2]);
   });
 
   it('formats key names, ticket controls and maps DOM key events', () => {

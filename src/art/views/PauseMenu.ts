@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { S } from '../../config/render';
 import { TUNING as T } from '../../config/tuning';
 import {
-  CONTROL_ACTIONS, PLAYERS, eventToKeyName, formatKeyName, resetPlayerKeys, setPlayerKey, type PlayerId,
+  CONTROL_ACTIONS, PLAYERS, cyclePlayerGamepad, eventToKeyName, formatKeyName, resetPlayerKeys, setPlayerKey,
+  type PlayerId,
 } from '../../config/players';
+import type { InputManager } from '../../input/InputManager';
 import { AudioManager } from '../../systems/AudioManager';
 import { INK, INK_HEX, PLAYER_INK } from '../palette';
 import { risoText } from '../type';
@@ -12,13 +14,16 @@ import { slamScale } from '../motion';
 import { readableInk } from '../hud';
 import { CHAR_NAMES } from '../ui';
 import {
-  PAUSE_ITEMS, PAUSE_LAYOUT, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
+  PAUSE_ITEMS, PAUSE_LAYOUT, padSlotLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
 } from '../screens';
 
 const MULTIPLY = Phaser.BlendModes.MULTIPLY;
-const ACTION_LABELS = ['LEFT', 'RIGHT', 'JUMP', 'DASH'] as const;
+const ACTION_LABELS = ['LEFT', 'RIGHT', 'JUMP', 'DASH', 'PAD'] as const;
+const CTRL_KEY_ROWS = 4;
+const CTRL_PAD_ROW = 4;
+const CTRL_BTN_ROW = 5;
 const CELL_SX = 1.45;
-const CELL_SY = 0.52;
+const CELL_SY = 0.46;
 
 export interface PauseMenuCallbacks {
   onResume: () => void;
@@ -49,6 +54,7 @@ export class PauseMenu {
   private readonly mainTexts: Phaser.GameObjects.Text[] = [];
   private readonly mainArrow: Phaser.GameObjects.Image;
   private readonly cells: CtrlCell[][] = [];
+  private readonly ctrlHeaders: Phaser.GameObjects.Text[] = [];
   private readonly bottomBtns: Phaser.GameObjects.Text[] = [];
 
   private open = false;
@@ -173,9 +179,13 @@ export class PauseMenu {
     this.root.setVisible(false);
   }
 
-  tick(tMs: number): void {
+  tick(tMs: number, inputMgr?: InputManager): void {
     this.now = tMs;
     if (!this.open) return;
+    if (inputMgr && !this.listening) {
+      this.handlePadInput(inputMgr);
+      if (!this.open) return;
+    }
 
     const s = slamScale(tMs - this.slammedAt);
     if (this.view === 'main') {
@@ -188,7 +198,7 @@ export class PauseMenu {
 
     if (s !== this.lastCtrlScale) {
       this.lastCtrlScale = s;
-      if (this.ctrlRow < 4) {
+      if (this.ctrlRow <= CTRL_PAD_ROW) {
         const cell = this.cells[this.ctrlRow][this.ctrlCol];
         cell.box.setScale(S * CELL_SX * s, S * CELL_SY * s);
         cell.text.setScale(s);
@@ -197,7 +207,7 @@ export class PauseMenu {
       }
     }
 
-    if (this.listening && this.ctrlRow < 4) {
+    if (this.listening && this.ctrlRow < CTRL_KEY_ROWS) {
       const vis = promptBlinkVisible(tMs);
       if (vis !== this.lastBlinkVis) {
         this.lastBlinkVis = vis;
@@ -205,7 +215,7 @@ export class PauseMenu {
       }
     } else if (!this.lastBlinkVis) {
       this.lastBlinkVis = true;
-      if (this.ctrlRow < 4) this.cells[this.ctrlRow][this.ctrlCol].text.setVisible(true);
+      if (this.ctrlRow <= CTRL_PAD_ROW) this.cells[this.ctrlRow][this.ctrlCol].text.setVisible(true);
     }
   }
 
@@ -221,13 +231,13 @@ export class PauseMenu {
     for (const p of PLAYERS) {
       const x = pauseCtrlColX(p.id);
       const color = INK[readableInk(PLAYER_INK[p.id])];
-      this.ctrlGroup.add(
-        scene.add
-          .text(x, L.ctrlHeaderY, `${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`, risoText(11, color, 'mono'))
-          .setFontStyle('bold')
-          .setOrigin(0.5)
-          .setBlendMode(MULTIPLY),
-      );
+      const hdr = scene.add
+        .text(x, L.ctrlHeaderY, `${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`, risoText(11, color, 'mono'))
+        .setFontStyle('bold')
+        .setOrigin(0.5)
+        .setBlendMode(MULTIPLY);
+      this.ctrlHeaders.push(hdr);
+      this.ctrlGroup.add(hdr);
     }
 
     ACTION_LABELS.forEach((label, row) => {
@@ -246,7 +256,7 @@ export class PauseMenu {
           .setBlendMode(MULTIPLY)
           .setInteractive({ useHandCursor: true });
         const text = scene.add
-          .text(x, y, '', risoText(12, INK.black, 'mono'))
+          .text(x, y, '', risoText(11, INK.black, 'mono'))
           .setFontStyle('bold')
           .setOrigin(0.5)
           .setBlendMode(MULTIPLY);
@@ -263,10 +273,7 @@ export class PauseMenu {
           if (!this.open || this.view !== 'controls' || this.listening) return;
           this.ctrlRow = row;
           this.ctrlCol = col;
-          this.listening = true;
-          this.slammedAt = this.now;
-          AudioManager.play('select');
-          this.refreshControlVisuals();
+          this.activateCtrlSelection();
         });
         rowCells.push({ box, text });
         this.ctrlGroup.add([box, text]);
@@ -287,8 +294,8 @@ export class PauseMenu {
         .setInteractive({ useHandCursor: true });
       btn.on('pointerover', () => {
         if (!this.open || this.view !== 'controls' || this.listening) return;
-        if (this.ctrlRow === 4 && this.ctrlCol === col) return;
-        this.ctrlRow = 4;
+        if (this.ctrlRow === CTRL_BTN_ROW && this.ctrlCol === col) return;
+        this.ctrlRow = CTRL_BTN_ROW;
         this.ctrlCol = col;
         this.slammedAt = this.now;
         AudioManager.play('select');
@@ -296,7 +303,7 @@ export class PauseMenu {
       });
       btn.on('pointerdown', () => {
         if (!this.open || this.view !== 'controls' || this.listening) return;
-        this.ctrlRow = 4;
+        this.ctrlRow = CTRL_BTN_ROW;
         this.ctrlCol = col;
         this.activateCtrlSelection();
       });
@@ -337,46 +344,102 @@ export class PauseMenu {
       t.setColor(i === this.mainCursor ? INK.pink : INK.black);
       if (i !== this.mainCursor) t.setScale(1);
     });
-    this.hint.setText('↑ ↓ MOVE · ENTER / SPACE SELECT · ESC RESUME');
+    this.hint.setText('↑ ↓ / PAD MOVE · ENTER / A SELECT · ESC / B RESUME');
   }
 
   private refreshControlLabels(): void {
-    CONTROL_ACTIONS.forEach((act, row) => {
-      for (const p of PLAYERS) {
+    for (const p of PLAYERS) {
+      this.ctrlHeaders[p.id]?.setText(`${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`);
+      CONTROL_ACTIONS.forEach((act, row) => {
         this.cells[row][p.id].text.setText(formatKeyName(p.keys[act]));
-      }
-    });
+      });
+      this.cells[CTRL_PAD_ROW][p.id].text.setText(padSlotLabel(p.gamepadIndex));
+    }
   }
 
   private refreshControlVisuals(): void {
     this.lastCtrlScale = NaN;
     this.lastBlinkVis = true;
-    CONTROL_ACTIONS.forEach((act, row) => {
-      for (const p of PLAYERS) {
-        const col = p.id;
+    for (const p of PLAYERS) {
+      this.ctrlHeaders[p.id]?.setText(`${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`);
+      const col = p.id;
+      for (let row = 0; row <= CTRL_PAD_ROW; row++) {
         const cell = this.cells[row][col];
         const active = this.ctrlRow === row && this.ctrlCol === col;
-        const isListening = active && this.listening;
+        const isListening = active && this.listening && row < CTRL_KEY_ROWS;
+        const label =
+          isListening
+            ? 'PRESS'
+            : row < CTRL_KEY_ROWS
+              ? formatKeyName(p.keys[CONTROL_ACTIONS[row]])
+              : padSlotLabel(p.gamepadIndex);
         cell.box.setTint(active ? INK_HEX.pink : INK_HEX.black);
         cell.text.setColor(active ? INK.pink : INK.black);
-        cell.text.setText(isListening ? 'PRESS' : formatKeyName(p.keys[act]));
+        cell.text.setText(label);
         cell.text.setVisible(true);
         if (!active) {
           cell.box.setScale(S * CELL_SX, S * CELL_SY);
           cell.text.setScale(1);
         }
       }
-    });
+    }
     this.bottomBtns.forEach((btn, col) => {
-      const active = this.ctrlRow === 4 && this.ctrlCol === col;
+      const active = this.ctrlRow === CTRL_BTN_ROW && this.ctrlCol === col;
       btn.setColor(active ? INK.pink : INK.black);
       if (!active) btn.setScale(1);
     });
     this.hint.setText(
       this.listening
         ? 'PRESS ANY KEY FOR NEW BINDING · ESC CANCEL'
-        : 'ARROWS MOVE · ENTER REBIND · ESC BACK',
+        : 'ARROWS / PAD MOVE · ENTER / A CHANGE · ESC / B BACK',
     );
+  }
+
+  private moveMainCursor(delta: -1 | 1): void {
+    this.mainCursor = (this.mainCursor + delta + PAUSE_ITEMS.length) % PAUSE_ITEMS.length;
+    this.slammedAt = this.now;
+    AudioManager.play('select');
+    this.refreshMainVisuals();
+  }
+
+  private moveCtrlCursor(dRow: -1 | 0 | 1, dCol: -1 | 0 | 1): void {
+    if (dRow !== 0) {
+      const rows = CTRL_BTN_ROW + 1;
+      this.ctrlRow = (this.ctrlRow + dRow + rows) % rows;
+      if (this.ctrlRow === CTRL_BTN_ROW && this.ctrlCol > 1) this.ctrlCol = 1;
+    }
+    if (dCol !== 0) {
+      const cols = this.ctrlRow === CTRL_BTN_ROW ? 2 : 3;
+      this.ctrlCol = (this.ctrlCol + dCol + cols) % cols;
+    }
+    this.slammedAt = this.now;
+    AudioManager.play('select');
+    this.refreshControlVisuals();
+  }
+
+  private handlePadInput(inputMgr: InputManager): void {
+    const dir = inputMgr.padMenuDir();
+    if (this.view === 'main') {
+      if (inputMgr.padStartPressed() || inputMgr.padBackPressed()) {
+        AudioManager.play('select');
+        this.hide();
+        this.callbacks.onResume();
+        return;
+      }
+      if (dir.up) this.moveMainCursor(-1);
+      else if (dir.down) this.moveMainCursor(1);
+      if (inputMgr.padConfirmPressed()) this.activateMainItem();
+      return;
+    }
+    if (inputMgr.padStartPressed() || inputMgr.padBackPressed()) {
+      this.leaveControls();
+      return;
+    }
+    if (dir.up) this.moveCtrlCursor(-1, 0);
+    else if (dir.down) this.moveCtrlCursor(1, 0);
+    else if (dir.left) this.moveCtrlCursor(0, -1);
+    else if (dir.right) this.moveCtrlCursor(0, 1);
+    if (inputMgr.padConfirmPressed()) this.activateCtrlSelection();
   }
 
   private handleMainKey(event: KeyboardEvent): void {
@@ -389,18 +452,12 @@ export class PauseMenu {
     }
     if (code === 'ArrowUp' || code === 'KeyW') {
       event.preventDefault?.();
-      this.mainCursor = (this.mainCursor + PAUSE_ITEMS.length - 1) % PAUSE_ITEMS.length;
-      this.slammedAt = this.now;
-      AudioManager.play('select');
-      this.refreshMainVisuals();
+      this.moveMainCursor(-1);
       return;
     }
     if (code === 'ArrowDown' || code === 'KeyS') {
       event.preventDefault?.();
-      this.mainCursor = (this.mainCursor + 1) % PAUSE_ITEMS.length;
-      this.slammedAt = this.now;
-      AudioManager.play('select');
-      this.refreshMainVisuals();
+      this.moveMainCursor(1);
       return;
     }
     if (code === 'Enter' || code === 'NumpadEnter' || code === 'Space') {
@@ -443,36 +500,22 @@ export class PauseMenu {
     }
     if (code === 'ArrowUp' || code === 'KeyW') {
       event.preventDefault?.();
-      this.ctrlRow = (this.ctrlRow + 4) % 5;
-      if (this.ctrlRow === 4 && this.ctrlCol > 1) this.ctrlCol = 1;
-      this.slammedAt = this.now;
-      AudioManager.play('select');
-      this.refreshControlVisuals();
+      this.moveCtrlCursor(-1, 0);
       return;
     }
     if (code === 'ArrowDown' || code === 'KeyS') {
       event.preventDefault?.();
-      this.ctrlRow = (this.ctrlRow + 1) % 5;
-      if (this.ctrlRow === 4 && this.ctrlCol > 1) this.ctrlCol = 1;
-      this.slammedAt = this.now;
-      AudioManager.play('select');
-      this.refreshControlVisuals();
+      this.moveCtrlCursor(1, 0);
       return;
     }
     if (code === 'ArrowLeft' || code === 'KeyA') {
       event.preventDefault?.();
-      this.ctrlCol = this.ctrlRow === 4 ? (this.ctrlCol === 0 ? 1 : 0) : (this.ctrlCol + 2) % 3;
-      this.slammedAt = this.now;
-      AudioManager.play('select');
-      this.refreshControlVisuals();
+      this.moveCtrlCursor(0, -1);
       return;
     }
     if (code === 'ArrowRight' || code === 'KeyD') {
       event.preventDefault?.();
-      this.ctrlCol = this.ctrlRow === 4 ? (this.ctrlCol === 0 ? 1 : 0) : (this.ctrlCol + 1) % 3;
-      this.slammedAt = this.now;
-      AudioManager.play('select');
-      this.refreshControlVisuals();
+      this.moveCtrlCursor(0, 1);
       return;
     }
     if (code === 'Enter' || code === 'NumpadEnter' || code === 'Space') {
@@ -482,10 +525,17 @@ export class PauseMenu {
   }
 
   private activateCtrlSelection(): void {
-    if (this.ctrlRow < 4) {
+    if (this.ctrlRow < CTRL_KEY_ROWS) {
       this.listening = true;
       this.slammedAt = this.now;
       AudioManager.play('select');
+      this.refreshControlVisuals();
+    } else if (this.ctrlRow === CTRL_PAD_ROW) {
+      cyclePlayerGamepad(this.ctrlCol as PlayerId);
+      this.callbacks.onRebind();
+      this.slammedAt = this.now;
+      AudioManager.play('join');
+      this.refreshControlLabels();
       this.refreshControlVisuals();
     } else if (this.ctrlCol === 0) {
       resetPlayerKeys();

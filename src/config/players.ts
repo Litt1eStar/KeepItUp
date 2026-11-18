@@ -2,6 +2,18 @@ export type PlayerId = 0 | 1 | 2;
 export type Shape = 'triangle' | 'circle' | 'square';
 export type ControlAction = 'left' | 'right' | 'jump' | 'dash';
 export type PlayerKeys = Record<ControlAction, string>;
+export type CharStyleId = 0 | 1 | 2 | 3 | 4 | 5;
+
+export const CHAR_STYLE_COUNT = 6;
+export const CHAR_STYLE_IDS: readonly CharStyleId[] = [0, 1, 2, 3, 4, 5] as const;
+export const CHAR_STYLE_NAMES: Readonly<Record<CharStyleId, string>> = {
+  0: 'PIK',
+  1: 'BLOOP',
+  2: 'BRICK',
+  3: 'ZAP',
+  4: 'MOMO',
+  5: 'DOZER',
+};
 
 export const CONTROL_ACTIONS: readonly ControlAction[] = ['left', 'right', 'jump', 'dash'] as const;
 
@@ -11,10 +23,18 @@ export const DEFAULT_KEYS: Readonly<Record<PlayerId, Readonly<PlayerKeys>>> = {
   2: { left: 'J', right: 'L', jump: 'I', dash: 'K' },
 };
 
+export const DEFAULT_GAMEPADS: Readonly<Record<PlayerId, number | null>> = {
+  0: null,
+  1: 0,
+  2: 1,
+};
+
 export interface PlayerDef {
   id: PlayerId;
   name: string;
   shape: Shape;
+  /** Visual character variant (face + eye layout) chosen in the lobby. */
+  charStyle: CharStyleId;
   /** Shape glyph used in text (lobby, HUD, report). */
   glyph: string;
   keys: PlayerKeys;
@@ -23,33 +43,36 @@ export interface PlayerDef {
   spawnX: number;
 }
 
-// Keys use Phaser KeyCodes names. P2/P3 also accept gamepad 1/2 (doc controls table).
+// Keys use Phaser KeyCodes names. P2/P3 default to gamepad 1/2 (can be reassigned in Controls/Lobby).
 export const PLAYERS: readonly PlayerDef[] = [
   {
     id: 0,
     name: 'P1',
     shape: 'triangle',
+    charStyle: 0,
     glyph: '▲',
     keys: { ...DEFAULT_KEYS[0] },
-    gamepadIndex: null,
+    gamepadIndex: DEFAULT_GAMEPADS[0],
     spawnX: 240,
   },
   {
     id: 1,
     name: 'P2',
     shape: 'circle',
+    charStyle: 1,
     glyph: '●',
     keys: { ...DEFAULT_KEYS[1] },
-    gamepadIndex: 0,
+    gamepadIndex: DEFAULT_GAMEPADS[1],
     spawnX: 480,
   },
   {
     id: 2,
     name: 'P3',
     shape: 'square',
+    charStyle: 2,
     glyph: '■',
     keys: { ...DEFAULT_KEYS[2] },
-    gamepadIndex: 1,
+    gamepadIndex: DEFAULT_GAMEPADS[2],
     spawnX: 720,
   },
 ];
@@ -189,11 +212,52 @@ export function setPlayerKey(id: PlayerId, action: ControlAction, rawKey: string
   if (persist) saveKeys();
 }
 
-/** Restore all player key bindings to `DEFAULT_KEYS`. */
+/** Assign a player's character style variant (0..5). */
+export function setPlayerCharStyle(id: PlayerId, style: CharStyleId): CharStyleId {
+  PLAYERS[id].charStyle = style;
+  return style;
+}
+
+/** Cycle a player's character style variant forward or backward through all 6 variants. */
+export function cyclePlayerCharStyle(id: PlayerId, delta: 1 | -1 = 1): CharStyleId {
+  const next = ((PLAYERS[id].charStyle + delta + CHAR_STYLE_COUNT) % CHAR_STYLE_COUNT) as CharStyleId;
+  return setPlayerCharStyle(id, next);
+}
+
+/** Restore default character styles (0=PIK, 1=BLOOP, 2=BRICK). */
+export function resetPlayerCharStyles(): void {
+  for (const p of PLAYERS) p.charStyle = p.id as CharStyleId;
+}
+
+/** Assign `padIndex` (0, 1, or null) to player `id`, swapping if another player uses it. */
+export function setPlayerGamepad(id: PlayerId, padIndex: number | null): void {
+  const prev = PLAYERS[id].gamepadIndex;
+  if (prev === padIndex) return;
+  if (padIndex !== null) {
+    for (const p of PLAYERS) {
+      if (p.id !== id && p.gamepadIndex === padIndex) {
+        p.gamepadIndex = prev;
+      }
+    }
+  }
+  PLAYERS[id].gamepadIndex = padIndex;
+}
+
+/** Cycle a player's gamepad slot: Keyboard Only -> Pad 1 -> Pad 2 -> Keyboard Only. */
+export function cyclePlayerGamepad(id: PlayerId): number | null {
+  const order: readonly (number | null)[] = [null, 0, 1];
+  const idx = order.indexOf(PLAYERS[id].gamepadIndex);
+  const next = order[(idx + 1) % order.length];
+  setPlayerGamepad(id, next);
+  return next;
+}
+
+/** Restore all player key bindings to `DEFAULT_KEYS` and gamepads to `DEFAULT_GAMEPADS`. */
 export function resetPlayerKeys(persist = true): void {
   for (const p of PLAYERS) {
     const def = DEFAULT_KEYS[p.id];
     for (const act of CONTROL_ACTIONS) p.keys[act] = def[act];
+    p.gamepadIndex = DEFAULT_GAMEPADS[p.id];
   }
   if (persist) saveKeys();
 }

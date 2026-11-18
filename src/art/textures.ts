@@ -177,6 +177,19 @@ export function refreshTicketTextures(scene: Phaser.Scene): void {
   }
 }
 
+/** Regenerate character body + ticket textures after switching character style in the lobby. */
+export function refreshCharacterTextures(scene: Phaser.Scene, id?: PlayerId): void {
+  const K = RISO_KEYS;
+  const targets = id === undefined ? PLAYERS : [PLAYERS[id]];
+  for (const p of targets) {
+    canvasTexture(scene, K.charFill(p.id), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterFill(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy));
+    for (let v = 0; v < BOIL_VARIANTS; v++) {
+      canvasTexture(scene, K.charLine(p.id, v), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterLine(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy, v));
+    }
+    canvasTexture(scene, K.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
+  }
+}
+
 /** Lazily generate the incoming spawn halo for player `id` if not already registered. */
 export function ensureIncomingTexture(scene: Phaser.Scene, id: PlayerId): void {
   const key = RISO_KEYS.incoming(id);

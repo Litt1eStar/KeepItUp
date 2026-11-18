@@ -3,7 +3,7 @@
  * player ticket stubs, the high-score receipt and the next-ball dots. Splats live in splat.ts.
  * No Phaser import; all sizes logical.
  */
-import { PLAYERS, formatTicketControls, type PlayerId } from '../config/players';
+import { CHAR_STYLE_NAMES, PLAYERS, formatTicketControls, type PlayerId } from '../config/players';
 import { INK, INK_ANGLE, INK_HEX, PLAYER_INK, type InkName } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, paperGrain, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { DISPLAY_FONT, MONO_FONT } from './type';
@@ -84,7 +84,17 @@ export function drawFaintStamp(ctx: Ctx, id: StampId, w: number, h: number): voi
 // ---------------------------------------------------------------- ticket
 
 export const TICKET = { w: 190, h: 116, perfX: 56, notchR: 6 } as const;
-export const CHAR_NAMES: Record<PlayerId, string> = { 0: 'PIK', 1: 'BLOOP', 2: 'BRICK' };
+export const CHAR_NAMES: Record<PlayerId, string> = {
+  get 0() {
+    return CHAR_STYLE_NAMES[PLAYERS[0].charStyle];
+  },
+  get 1() {
+    return CHAR_STYLE_NAMES[PLAYERS[1].charStyle];
+  },
+  get 2() {
+    return CHAR_STYLE_NAMES[PLAYERS[2].charStyle];
+  },
+};
 
 function rectPts(x: number, y: number, w: number, h: number): Pt[] {
   return densify([[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]], 8).slice(0, -1);
@@ -152,6 +162,8 @@ function drawTicketBody(ctx: Ctx, id: PlayerId): void {
   drawCharacter(ctx, id, 0, 0, id);
   ctx.restore();
   ctx.fillStyle = B;
+  font(ctx, 6.5, MONO_FONT, 700);
+  ctx.fillText('◄ CHAR ►', 126, 36);
   let size = 30;
   font(ctx, size, DISPLAY_FONT);
   const maxW = w - 10 - 126;

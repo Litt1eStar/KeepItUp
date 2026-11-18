@@ -11,7 +11,7 @@
  * outline's lowest point touches the bottom edge, so use origin (0.5, 1) like the old player
  * sprite. Draw the fill with offset charMisreg(id). Faces look toward +x; flip with facing.
  */
-import { PLAYERS, type PlayerId } from '../config/players';
+import { PLAYERS, type CharStyleId, type PlayerId } from '../config/players';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE, PLAYER_INK } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, seeded, speckle, tracePath, wobblePoints } from './riso';
@@ -62,13 +62,32 @@ export interface EyeLayout {
   maxPupilOffsetY: number;
 }
 
-export const EYE_LAYOUT: Record<PlayerId, EyeLayout> = {
-  // PIK: sharp, narrow, slanted eyes → small pupils, almost no vertical travel
+export const STYLE_EYE_LAYOUT: Record<CharStyleId, EyeLayout> = {
+  // 0 PIK: sharp, narrow, slanted eyes -> small pupils, almost no vertical travel
   0: { eyes: [{ x: 3 * K, y: -6 * K }, { x: 16 * K, y: -6 * K }], eyeRadius: 5.2 * K, pupilRadius: 1.7 * K, maxPupilOffset: 1.2 * K, maxPupilOffsetY: 0.25 * K },
-  // BLOOP: big round eyes, free travel
+  // 1 BLOOP: big round eyes, free travel
   1: { eyes: [{ x: 2 * K, y: -5 * K }, { x: 17 * K, y: -5 * K }], eyeRadius: 6.2 * K, pupilRadius: 2.9 * K, maxPupilOffset: 2.5 * K, maxPupilOffsetY: 2.5 * K },
-  // BRICK: heavy lids; small pupils sit just under the lid
+  // 2 BRICK: heavy lids; small pupils sit just under the lid
   2: { eyes: [{ x: 3 * K, y: -2.4 * K }, { x: 17 * K, y: -2.4 * K }], eyeRadius: 5.6 * K, pupilRadius: 1.8 * K, maxPupilOffset: 1.4 * K, maxPupilOffsetY: 0.15 * K },
+  // 3 ZAP: sporty headband, round eyes, energetic look range
+  3: { eyes: [{ x: 2.5 * K, y: -5.5 * K }, { x: 16.5 * K, y: -5.5 * K }], eyeRadius: 5.4 * K, pupilRadius: 2.1 * K, maxPupilOffset: 1.8 * K, maxPupilOffsetY: 1.8 * K },
+  // 4 MOMO: bright cat eyes, wide curiosity
+  4: { eyes: [{ x: 2.2 * K, y: -4.2 * K }, { x: 16.2 * K, y: -4.2 * K }], eyeRadius: 5.8 * K, pupilRadius: 2.5 * K, maxPupilOffset: 2.0 * K, maxPupilOffsetY: 2.0 * K },
+  // 5 DOZER: goggle lenses, steady wide gaze
+  5: { eyes: [{ x: 2.8 * K, y: -4.8 * K }, { x: 16.0 * K, y: -4.8 * K }], eyeRadius: 5.5 * K, pupilRadius: 2.0 * K, maxPupilOffset: 1.7 * K, maxPupilOffsetY: 1.5 * K },
+};
+
+/** Dynamic per-player eye layout reflecting each player's selected character variant. */
+export const EYE_LAYOUT: Record<PlayerId, EyeLayout> = {
+  get 0() {
+    return STYLE_EYE_LAYOUT[PLAYERS[0].charStyle];
+  },
+  get 1() {
+    return STYLE_EYE_LAYOUT[PLAYERS[1].charStyle];
+  },
+  get 2() {
+    return STYLE_EYE_LAYOUT[PLAYERS[2].charStyle];
+  },
 };
 
 /** Shared pupil texture: radius PUPIL_TEX_R, centered in a PUPIL_TEX_SIZE square. */
@@ -80,6 +99,20 @@ export function pupilScale(id: PlayerId): number {
   return EYE_LAYOUT[id].pupilRadius / PUPIL_TEX_R;
 }
 
+/** Pupil position helper for a specific character style `style` (`0..5`). */
+export function pupilPosForStyle(
+  style: CharStyleId, eyeIndex: number, lookX: number, lookY: number, facing: 1 | -1, out: { x: number; y: number } = { x: 0, y: 0 },
+): { x: number; y: number } {
+  const L = STYLE_EYE_LAYOUT[style];
+  const e = L.eyes[eyeIndex];
+  const len = Math.hypot(lookX, lookY);
+  const ox = len > 1e-6 ? (lookX / len) * L.maxPupilOffset : 0;
+  const oy = len > 1e-6 ? (lookY / len) * L.maxPupilOffsetY : 0;
+  out.x = facing * e.x + ox;
+  out.y = -CHAR_R + e.y + oy;
+  return out;
+}
+
 /**
  * Pupil center for eye `eyeIndex` of character `id`, relative to the sprite origin (bottom-center;
  * body center at (0, -CHAR_R)), looking along world direction (lookX, lookY). Eye positions are
@@ -88,14 +121,7 @@ export function pupilScale(id: PlayerId): number {
 export function pupilPos(
   id: PlayerId, eyeIndex: number, lookX: number, lookY: number, facing: 1 | -1, out: { x: number; y: number } = { x: 0, y: 0 },
 ): { x: number; y: number } {
-  const L = EYE_LAYOUT[id];
-  const e = L.eyes[eyeIndex];
-  const len = Math.hypot(lookX, lookY);
-  const ox = len > 1e-6 ? (lookX / len) * L.maxPupilOffset : 0;
-  const oy = len > 1e-6 ? (lookY / len) * L.maxPupilOffsetY : 0;
-  out.x = facing * e.x + ox;
-  out.y = -CHAR_R + e.y + oy;
-  return out;
+  return pupilPosForStyle(PLAYERS[id].charStyle, eyeIndex, lookX, lookY, facing, out);
 }
 
 /** Contact shadow "radius" (drawShadow/shadowTexSize units): the shadow is ~1.1× the body wide. */
@@ -122,15 +148,15 @@ const BRICK_LID = -0.25; // lid stroke center at (circle center + LID × eyeRadi
 const LID_W = 2.6 * K;
 
 /**
- * Eye-white outline for eye `i` of `id`, relative to the body center (facing +x), unwobbled.
+ * Eye-white outline for eye `i` of character style `style`, relative to the body center (facing +x), unwobbled.
  * Pure: the same polygon is knocked out of the fill, stroked on the line layer and used in tests.
  * `smooth` = trace with curves (round eyes) instead of straight segments (sharp corners).
  */
-export function eyeOutline(id: PlayerId, i: number): { pts: Pt[]; smooth: boolean } {
-  const L = EYE_LAYOUT[id];
+export function eyeOutlineForStyle(style: CharStyleId, i: number): { pts: Pt[]; smooth: boolean } {
+  const L = STYLE_EYE_LAYOUT[style];
   const e = L.eyes[i];
   const er = L.eyeRadius;
-  if (id === 0) {
+  if (style === 0) {
     // almond with sharp corners, inner corner lower (mischievous slant)
     const tilt = i === 0 ? 0.3 : -0.3;
     const raw: Pt[] = [];
@@ -139,8 +165,8 @@ export function eyeOutline(id: PlayerId, i: number): { pts: Pt[]; smooth: boolea
     const c = Math.cos(tilt), sn = Math.sin(tilt);
     return { pts: raw.map(([px, py]) => [e.x + px * c - py * sn, e.y + px * sn + py * c]), smooth: false };
   }
-  if (id === 1) return { pts: circlePoints(e.x, e.y, er, 32), smooth: true };
-  // BRICK: lower part of a circle; the white starts at the lid stroke's lower edge
+  if (style !== 2) return { pts: circlePoints(e.x, e.y, er, 32), smooth: true };
+  // BRICK (style 2): lower part of a circle; the white starts at the lid stroke's lower edge
   const ox = e.x, oy = e.y + BRICK_EYE_DY;
   const top = BRICK_LID * er + LID_W / 2; // relative to circle center
   const a0 = Math.asin(top / er);
@@ -150,6 +176,11 @@ export function eyeOutline(id: PlayerId, i: number): { pts: Pt[]; smooth: boolea
     pts.push([ox + Math.cos(a) * er, oy + Math.sin(a) * er]);
   }
   return { pts, smooth: false };
+}
+
+/** Eye-white outline for eye `i` of player `id`'s active character variant. */
+export function eyeOutline(id: PlayerId, i: number): { pts: Pt[]; smooth: boolean } {
+  return eyeOutlineForStyle(PLAYERS[id].charStyle, i);
 }
 
 function traceEye(ctx: Ctx, id: PlayerId, i: number, cx: number, cy: number, seed = 0, amp = 0): void {
@@ -216,8 +247,9 @@ export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number
     ctx.restore();
   }
   const at = (pts: Pt[]): Pt[] => pts.map(([x, y]) => [cx + x * K, cy + y * K]);
-  if (id === 0) {
-    // sharp brows slanting toward the center + wide filled grin with a dimple
+  const style = PLAYERS[id].charStyle;
+  if (style === 0) {
+    // PIK: sharp brows slanting toward the center + wide filled grin with a dimple
     handLine(ctx, at([[-2, -12.5], [2, -11.5], [6.5, -10]]), s + 1, 1.8 * K, B, 0.25);
     handLine(ctx, at([[12.5, -10.5], [17, -12], [21, -13.5]]), s + 2, 1.8 * K, B, 0.25);
     ctx.save();
@@ -226,8 +258,8 @@ export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number
     ctx.fill();
     ctx.restore();
     handLine(ctx, at([[19.5, 0], [21.5, 3.2]]), s + 4, 1.3 * K, B, 0.2);
-  } else if (id === 1) {
-    // small "o" mouth + hatched blush
+  } else if (style === 1) {
+    // BLOOP: small "o" mouth + hatched blush
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(cx + 10 * K, cy + 8 * K, 2.1 * K, 2.6 * K, 0, 0, Math.PI * 2);
@@ -241,14 +273,38 @@ export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number
         handLine(ctx, at([[x0, 4.5], [x0 + 1.4, 1.8]]), s + 20 + bx + j, 0.9 * K, B, 0.15);
       }
     }
-  } else {
-    // heavy lids (thick flat line over each eye) + flat mouth
-    const er = EYE_LAYOUT[2].eyeRadius;
-    for (const e of EYE_LAYOUT[2].eyes) {
+  } else if (style === 2) {
+    // BRICK: heavy lids (thick flat line over each eye) + flat mouth
+    const er = STYLE_EYE_LAYOUT[2].eyeRadius;
+    for (const e of STYLE_EYE_LAYOUT[2].eyes) {
       const ly = cy + e.y + BRICK_EYE_DY + BRICK_LID * er;
       handLine(ctx, [[cx + e.x - er - 1.2 * K, ly + 0.3 * K], [cx + e.x, ly], [cx + e.x + er + 1 * K, ly - 0.2 * K]], s + Math.round(e.x), LID_W, B, 0.2);
     }
     handLine(ctx, at([[4.5, 9], [10, 9.2], [15.5, 8.8]]), s + 5, 2 * K, B, 0.25);
+  } else if (style === 3) {
+    // ZAP: forehead headband + fierce V-brows + zigzag lightning grin
+    handLine(ctx, at([[-14, -14.5], [2, -16], [19, -14.5]]), s + 1, 2.2 * K, B, 0.2);
+    handLine(ctx, at([[-1.5, -12], [6, -9.5]]), s + 2, 1.9 * K, B, 0.2);
+    handLine(ctx, at([[12, -9.5], [20, -12.5]]), s + 3, 1.9 * K, B, 0.2);
+    handLine(ctx, at([[1, 6], [5.5, 9.5], [10, 5.5], [14.5, 9.5], [19, 5.5]]), s + 4, 2 * K, B, 0.2);
+  } else if (style === 4) {
+    // MOMO: arched cat brows + "w" cat mouth + cheek whiskers
+    handLine(ctx, at([[-1, -11.5], [2.5, -13], [6, -11.5]]), s + 1, 1.5 * K, B, 0.2);
+    handLine(ctx, at([[12.5, -11.5], [16, -13], [19.5, -11.5]]), s + 2, 1.5 * K, B, 0.2);
+    handLine(ctx, at([[3, 6], [6.5, 9.2], [9.8, 6.2], [13.2, 9.2], [16.5, 5.8]]), s + 3, 1.8 * K, B, 0.2);
+    handLine(ctx, at([[-8.5, 1.5], [-3.5, 2.5]]), s + 4, 1.2 * K, B, 0.15);
+    handLine(ctx, at([[-8.5, 5], [-3.5, 4.8]]), s + 5, 1.2 * K, B, 0.15);
+    handLine(ctx, at([[20.5, 2.2], [24.2, 1.2]]), s + 6, 1.2 * K, B, 0.15);
+    handLine(ctx, at([[20.5, 4.8], [24.2, 5.2]]), s + 7, 1.2 * K, B, 0.15);
+  } else {
+    // DOZER: goggle bridge + side strap + thick brow ridge + stitched underbite grin
+    handLine(ctx, at([[8.2, -5.5], [10.6, -5.5]]), s + 1, 2.4 * K, B, 0.15);
+    handLine(ctx, at([[-17, -5.5], [-2.8, -5.2]]), s + 2, 2.4 * K, B, 0.2);
+    handLine(ctx, at([[-2, -11.2], [10, -11.4], [21, -11]]), s + 3, 2.1 * K, B, 0.2);
+    handLine(ctx, at([[2, 7.5], [10, 8], [18, 7.3]]), s + 4, 2.2 * K, B, 0.2);
+    for (const tx of [6, 10, 14]) {
+      handLine(ctx, at([[tx, 5.5], [tx, 9.8]]), s + 10 + tx, 1.2 * K, B, 0.15);
+    }
   }
   // back sticker outline
   const st = stickerAt(cx, cy);

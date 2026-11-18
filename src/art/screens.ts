@@ -34,7 +34,13 @@ export function joinPrompt(id: PlayerId, joined: boolean): string {
 /** Gamepad status label printed below the join prompt. */
 export function padLabel(gamepadIndex: number | null, connected: boolean): string {
   if (gamepadIndex === null) return 'KEYBOARD';
-  return connected ? `GAMEPAD ${gamepadIndex + 1} READY` : 'KEYBOARD (NO PAD)';
+  return connected ? `GAMEPAD ${gamepadIndex + 1} READY` : `PAD ${gamepadIndex + 1} (NO PAD)`;
+}
+
+/** Short label printed in the Controls grid PAD row. */
+export function padSlotLabel(gamepadIndex: number | null): string {
+  if (gamepadIndex === null) return 'KEY ONLY';
+  return `PAD ${gamepadIndex + 1}`;
 }
 
 export const PROMPT_BLINK_PERIOD = 10;
@@ -167,8 +173,8 @@ export const PAUSE_LAYOUT = {
   ctrlColX0: 368,
   ctrlColStep: 118,
   ctrlRowLabelX: 242,
-  ctrlRowY0: 182,
-  ctrlRowStep: 36,
+  ctrlRowY0: 176,
+  ctrlRowStep: 32,
   ctrlBtnY: 344,
   ctrlResetX: 376,
   ctrlBackX: 596,

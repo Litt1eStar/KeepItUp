@@ -253,16 +253,20 @@ export class MenuScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     this.now = time;
     this.roller.tick(time);
-    this.controlsMenu.tick(time);
     if (this.roller.isExiting) return;
+    this.inputMgr.update();
+    this.controlsMenu.tick(time, this.inputMgr);
 
     this.juice.update(time);
     const dt = Math.min(delta, 50) / 1000;
 
     if (!this.controlsMenu.isOpen) {
-      this.inputMgr.update();
-      if (this.inputMgr.startPressed()) {
+      const dir = this.inputMgr.padMenuDir();
+      if (dir.up) this.moveCursor(-1);
+      else if (dir.down) this.moveCursor(1);
+      if (this.inputMgr.startPressed() || this.inputMgr.padConfirmPressed()) {
         this.activateItem();
+        if (this.controlsMenu.isOpen) this.inputMgr.clearLatched();
         return;
       }
     }

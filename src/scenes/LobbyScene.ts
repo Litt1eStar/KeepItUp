@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import { PLAYERS, type PlayerId } from '../config/players';
+import { PLAYERS, cyclePlayerCharStyle, cyclePlayerGamepad, type PlayerId } from '../config/players';
 import { InputManager } from '../input/InputManager';
 import { World, type BumpEvent, type HitEvent } from '../game/World';
 import { drawStage } from '../game/stage';
@@ -10,7 +10,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { leaderboard } from '../services/Leaderboard';
 import { INK, INK_HEX, PAPER, PLAYER_INK } from '../art/palette';
 import { risoText } from '../art/type';
-import { RISO_KEYS, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
+import { RISO_KEYS, refreshCharacterTextures, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
 import { TICKET, stampTint } from '../art/ui';
 import { demoStripVisible, readableInk } from '../art/hud';
 import { StampSlam } from '../art/views/StampSlam';
@@ -88,8 +88,12 @@ export class LobbyScene extends Phaser.Scene {
       this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
     });
     this.world.on('bump', (e: BumpEvent) => {
-      AudioManager.play('hit');
+      AudioManager.play(e.kind === 'trampoline' ? 'trampoline' : 'bump');
       this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'hit', 2);
+    });
+    this.world.on('ballCollide', (e: BumpEvent) => {
+      AudioManager.play('clack');
+      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'small', 2);
     });
     this.world.on('floor', (ball: Ball) => {
       this.juice.popup(ball.x, T.floorY - 30, 'oops! (practice)', 'black', 16);
@@ -103,7 +107,22 @@ export class LobbyScene extends Phaser.Scene {
       onResume: () => this.inputMgr.clearLatched(),
       onRebind: () => this.onRebindKeys(),
     });
+    const onLobbyKey = (event: KeyboardEvent) => {
+      if (this.controlsMenu.isOpen || this.roller.isExiting) return;
+      if (event.code === 'Digit1') {
+        this.idle = 0;
+        this.cycleCharacter(0, 1);
+      } else if (event.code === 'Digit2') {
+        this.idle = 0;
+        this.cycleCharacter(1, 1);
+      } else if (event.code === 'Digit3') {
+        this.idle = 0;
+        this.cycleCharacter(2, 1);
+      }
+    };
+    this.input.keyboard?.on('keydown', onLobbyKey);
     this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown', onLobbyKey);
       this.roller.destroy();
       this.world.destroy();
     });
@@ -115,8 +134,23 @@ export class LobbyScene extends Phaser.Scene {
     for (const p of PLAYERS) {
       const card = this.cards[p.id];
       card.ticket.setTexture(RISO_KEYS.ticket(p.id));
+      const padText = padLabel(p.gamepadIndex, this.inputMgr.padConnected(p.gamepadIndex));
+      card.lastPad = padText;
+      card.pad.setText(padText);
       if (!this.joined.has(p.id)) card.status.setText(joinPrompt(p.id, false));
     }
+  }
+
+  private cycleCharacter(id: PlayerId, delta: 1 | -1): void {
+    cyclePlayerCharStyle(id, delta);
+    refreshCharacterTextures(this, id);
+    this.cards[id].ticket.setTexture(RISO_KEYS.ticket(id));
+    const live = this.world.playerById(id);
+    if (live) {
+      live.view.refreshStyle();
+      this.juice.splat(live.x, live.y - 18, PLAYER_INK[id], 'small', 1);
+    }
+    AudioManager.play('select');
   }
 
   private buildCoverHeader(): void {
@@ -154,7 +188,17 @@ export class LobbyScene extends Phaser.Scene {
     const tk = LOBBY.tickets;
     for (const p of PLAYERS) {
       const x = ticketX(p.id);
-      const ticket = this.add.image(x, tk.y, RISO_KEYS.ticket(p.id)).setOrigin(0).setScale(S * tk.scale).setDepth(5);
+      const ticket = this.add
+        .image(x, tk.y, RISO_KEYS.ticket(p.id))
+        .setOrigin(0)
+        .setScale(S * tk.scale)
+        .setDepth(5)
+        .setInteractive({ useHandCursor: true });
+      ticket.on('pointerdown', () => {
+        if (this.controlsMenu.isOpen || this.roller.isExiting) return;
+        this.idle = 0;
+        this.cycleCharacter(p.id, 1);
+      });
       const slam = new StampSlam(this, 'JOINED', stampTint(PLAYER_INK[p.id]), tk.stampRot, tk.stampScale);
       slam.image.setPosition(x + tk.stampOffsetX, tk.y + tk.stampOffsetY).setDepth(7).setVisible(false);
 
@@ -171,7 +215,15 @@ export class LobbyScene extends Phaser.Scene {
         .text(cx, tk.padY, initialPad, risoText(10, INK.black, 'mono'))
         .setOrigin(0.5, 0)
         .setBlendMode(MULTIPLY)
-        .setDepth(6);
+        .setDepth(6)
+        .setInteractive({ useHandCursor: true });
+      pad.on('pointerdown', () => {
+        if (this.controlsMenu.isOpen || this.roller.isExiting) return;
+        this.idle = 0;
+        cyclePlayerGamepad(p.id);
+        this.onRebindKeys();
+        AudioManager.play('join');
+      });
       this.cards.push({ ticket, slam, status, pad, lastPad: initialPad, lastVis: true });
     }
   }
@@ -213,17 +265,22 @@ export class LobbyScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     this.now = time;
     this.roller.tick(time);
-    this.controlsMenu.tick(time);
     if (this.roller.isExiting) return;
+    this.inputMgr.update();
+    this.controlsMenu.tick(time, this.inputMgr);
     if (this.controlsMenu.isOpen) {
       this.idle = 0;
       return;
     }
     this.juice.update(time);
-    this.inputMgr.update();
     const dt = Math.min(delta, 50) / 1000;
 
     for (const p of PLAYERS) {
+      if (!this.joined.has(p.id)) {
+        if (this.inputMgr.playerLeftEdge(p.id)) this.cycleCharacter(p.id, -1);
+        else if (this.inputMgr.playerRightEdge(p.id)) this.cycleCharacter(p.id, 1);
+      }
+      if (this.inputMgr.padCharPressed(p.id)) this.cycleCharacter(p.id, 1);
       if (this.inputMgr.get(p.id).jumpPressed) this.join(p.id);
       const card = this.cards[p.id];
       const padText = padLabel(p.gamepadIndex, this.inputMgr.padConnected(p.gamepadIndex));

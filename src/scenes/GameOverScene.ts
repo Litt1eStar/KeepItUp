@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import { PLAYERS } from '../config/players';
 import { InputManager } from '../input/InputManager';
 import { drawStage } from '../game/stage';
 import { AudioManager } from '../systems/AudioManager';
@@ -53,8 +52,6 @@ export class GameOverScene extends Phaser.Scene {
   private countdown!: Phaser.GameObjects.Text;
   private shownCountdown = '';
   private entryLayer: Phaser.GameObjects.GameObject[] = [];
-  private prevLeft = false;
-  private prevRight = false;
 
   constructor() {
     super('GameOver');
@@ -77,8 +74,6 @@ export class GameOverScene extends Phaser.Scene {
     this.slotShownScale = [];
     this.shownCountdown = '';
     this.entryLayer = [];
-    this.prevLeft = false;
-    this.prevRight = false;
     const def = DEFAULT_NAMES[Math.floor(Math.random() * DEFAULT_NAMES.length)].padEnd(NAME_LEN, ' ');
     this.name = def.split('');
   }
@@ -95,7 +90,9 @@ export class GameOverScene extends Phaser.Scene {
         event.preventDefault?.();
         AudioManager.play('select');
         this.roller.exitTo('Lobby');
+        return;
       }
+      if (this.state === 'entry') this.handleEntryKey(event);
     };
     this.input.keyboard?.on('keydown', onKeyDown);
     this.events.once('shutdown', () => {
@@ -207,7 +204,7 @@ export class GameOverScene extends Phaser.Scene {
     this.entryLayer.push(
       this.cursorMarker,
       this.add
-        .text(e.x, e.hintY, '◀ ▶  MOVE     JUMP = NEXT LETTER     DASH = PREV\nSPACE / ENTER / START = STAMP TEAM', risoText(e.hintSize, INK.black, 'mono'))
+        .text(e.x, e.hintY, 'TYPE NAME · ◀ ▶ MOVE · ↑ ↓ / PAD LETTER\nSPACE / ENTER / START = STAMP TEAM', risoText(e.hintSize, INK.black, 'mono'))
         .setFontStyle('bold')
         .setBlendMode(MULTIPLY)
         .setDepth(6),
@@ -259,9 +256,9 @@ export class GameOverScene extends Phaser.Scene {
       if (this.idle > T.gameOverAutoReturnS) void this.submit();
     } else if (this.state === 'board') {
       this.setCountdownText(boardCountdownLabel(T.gameOverAutoReturnS - this.idle));
-      if (this.inputMgr.startPressed()) {
+      if (this.inputMgr.startPressed() || this.inputMgr.padConfirmPressed()) {
         this.roller.exitTo('Game', { mode: 'play', players: this.result.players });
-      } else if (this.idle > T.gameOverAutoReturnS) {
+      } else if (this.inputMgr.padBackPressed() || this.idle > T.gameOverAutoReturnS) {
         this.roller.exitTo('Lobby');
       }
     }
@@ -287,25 +284,75 @@ export class GameOverScene extends Phaser.Scene {
     this.countdown.setText(text);
   }
 
-  private updateEntry(): void {
-    let left = false;
-    let right = false;
-    let up = false;
-    let down = false;
-    for (const p of PLAYERS) {
-      const i = this.inputMgr.get(p.id);
-      left ||= i.left;
-      right ||= i.right;
-      up ||= i.jumpPressed;
-      down ||= i.dashPressed;
-    }
-    const leftEdge = left && !this.prevLeft;
-    const rightEdge = right && !this.prevRight;
-    this.prevLeft = left;
-    this.prevRight = right;
+  private moveCursor(delta: -1 | 1): void {
+    this.cursor = (this.cursor + delta + NAME_LEN) % NAME_LEN;
+    AudioManager.play('select');
+  }
 
-    if (leftEdge) this.cursor = (this.cursor + NAME_LEN - 1) % NAME_LEN;
-    if (rightEdge) this.cursor = (this.cursor + 1) % NAME_LEN;
+  private stepChar(delta: -1 | 1): void {
+    const idx = ALPHABET.indexOf(this.name[this.cursor]);
+    const next = (idx + delta + ALPHABET.length) % ALPHABET.length;
+    this.name[this.cursor] = ALPHABET[next];
+    this.slots[this.cursor].setText(ALPHABET[next]);
+    this.slotSlammedAt[this.cursor] = this.now;
+    AudioManager.play('select');
+  }
+
+  private handleEntryKey(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const code = event.code;
+    if (code === 'ArrowLeft') {
+      event.preventDefault?.();
+      this.idle = 0;
+      this.moveCursor(-1);
+      return;
+    }
+    if (code === 'ArrowRight') {
+      event.preventDefault?.();
+      this.idle = 0;
+      this.moveCursor(1);
+      return;
+    }
+    if (code === 'ArrowUp') {
+      event.preventDefault?.();
+      this.idle = 0;
+      this.stepChar(1);
+      return;
+    }
+    if (code === 'ArrowDown') {
+      event.preventDefault?.();
+      this.idle = 0;
+      this.stepChar(-1);
+      return;
+    }
+    if (code === 'Backspace') {
+      event.preventDefault?.();
+      this.idle = 0;
+      this.name[this.cursor] = ' ';
+      this.slots[this.cursor].setText(' ');
+      this.slotSlammedAt[this.cursor] = this.now;
+      if (this.cursor > 0) this.cursor--;
+      AudioManager.play('select');
+      return;
+    }
+    const ch = event.key.length === 1 ? event.key.toUpperCase() : '';
+    if (ch && ch !== ' ' && ALPHABET.includes(ch)) {
+      event.preventDefault?.();
+      this.idle = 0;
+      this.name[this.cursor] = ch;
+      this.slots[this.cursor].setText(ch);
+      this.slotSlammedAt[this.cursor] = this.now;
+      this.cursor = Math.min(NAME_LEN - 1, this.cursor + 1);
+      AudioManager.play('select');
+    }
+  }
+
+  private updateEntry(): void {
+    const dir = this.inputMgr.padMenuDir();
+    if (dir.left) this.moveCursor(-1);
+    if (dir.right) this.moveCursor(1);
+    if (dir.up || this.inputMgr.padConfirmPressed()) this.stepChar(1);
+    else if (dir.down || this.inputMgr.padBackPressed()) this.stepChar(-1);
 
     if (this.cursor !== this.shownCursor) {
       this.slotBoxes[this.shownCursor].setTint(INK_HEX.black);
@@ -316,15 +363,6 @@ export class GameOverScene extends Phaser.Scene {
       this.slotSlammedAt[this.cursor] = this.now;
       this.shownCursor = this.cursor;
     }
-
-    if (up || down) {
-      const idx = ALPHABET.indexOf(this.name[this.cursor]);
-      const next = (idx + (up ? 1 : -1) + ALPHABET.length) % ALPHABET.length;
-      this.name[this.cursor] = ALPHABET[next];
-      this.slots[this.cursor].setText(ALPHABET[next]);
-      this.slotSlammedAt[this.cursor] = this.now;
-    }
-    if (leftEdge || rightEdge || up || down) AudioManager.play('select');
 
     for (let i = 0; i < NAME_LEN; i++) {
       const k = slamScale(this.now - this.slotSlammedAt[i]);

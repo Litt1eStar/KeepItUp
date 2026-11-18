@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BODY_R, CHAR_R, CHAR_TEX, EYE_LAYOUT, EYE_LINE_W, OUTLINE_W, PUPIL_TEX_R,
-  charMisreg, charOutlineExtent, eyeOutline, pupilPos, pupilScale,
+  BODY_R, CHAR_R, CHAR_TEX, EYE_LAYOUT, EYE_LINE_W, OUTLINE_W, PUPIL_TEX_R, STYLE_EYE_LAYOUT,
+  charMisreg, charOutlineExtent, eyeOutline, eyeOutlineForStyle, pupilPos, pupilPosForStyle, pupilScale,
   CHAR_SHADOW_R, charShadowScale, charShadowStep,
 } from '../src/art/characters';
 import { ARROW_GLYPH_SIZE, ARROW_TEX, arrowExtent, arrowGlyphCenter, arrowTriangle } from '../src/art/arrow';
@@ -15,7 +15,7 @@ import { jitterDots, halftoneDots } from '../src/art/riso';
 import { INK_ANGLE } from '../src/art/palette';
 import { BOIL_VARIANTS, RISO_KEYS, allRisoKeys } from '../src/art/textures';
 import { TUNING } from '../src/config/tuning';
-import type { PlayerId } from '../src/config/players';
+import { CHAR_STYLE_IDS, type PlayerId } from '../src/config/players';
 
 const IDS: PlayerId[] = [0, 1, 2];
 
@@ -80,6 +80,28 @@ describe('characters', () => {
         expect(d).toBeLessThanOrEqual(2 + 1e-9);
       }
       expect(charMisreg(id)).toEqual(charMisreg(id));
+    }
+  });
+  it('all 6 character styles have 2 eyes inside BODY_R and pupils clear eye whites in all directions', () => {
+    const inner = BODY_R - OUTLINE_W / 2;
+    for (const style of CHAR_STYLE_IDS) {
+      const L = STYLE_EYE_LAYOUT[style];
+      expect(L.eyes).toHaveLength(2);
+      expect(L.maxPupilOffset).toBeLessThan(L.eyeRadius);
+      for (let i = 0; i < 2; i++) {
+        for (const [x, y] of eyeOutlineForStyle(style, i).pts) {
+          expect(Math.hypot(x, y) + EYE_LINE_W / 2).toBeLessThan(inner);
+        }
+      }
+      for (const facing of [1, -1] as const) {
+        for (let i = 0; i < 2; i++) {
+          const poly: Pt[] = eyeOutlineForStyle(style, i).pts.map(([x, y]) => [facing * x, y - CHAR_R]);
+          for (let a = 0; a < 32; a++) {
+            const p = pupilPosForStyle(style, i, Math.cos((a / 32) * Math.PI * 2), Math.sin((a / 32) * Math.PI * 2), facing);
+            expect(polygonClearance(poly, [p.x, p.y])).toBeGreaterThanOrEqual(L.pupilRadius + EYE_LINE_W / 2 - 1e-6);
+          }
+        }
+      }
     }
   });
 });
