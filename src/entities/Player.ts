@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import type { PlayerDef } from '../config/players';
+import type { CharStyleId, PlayerDef } from '../config/players';
 import type { PlayerInput } from '../input/InputManager';
 import { CHAR_R, charShadowScale, charShadowStep } from '../art/characters';
 import { airPose, idlePose, joltOffset, runPose, stepSquash, type IdlePose } from '../art/motion';
@@ -55,12 +55,20 @@ export class Player {
 
   readonly w = T.playerWidth;
   readonly h = T.playerHeight;
+  readonly homeX: number;
 
-  constructor(scene: Phaser.Scene, readonly def: PlayerDef, x = def.spawnX) {
+  constructor(
+    scene: Phaser.Scene,
+    readonly def: PlayerDef,
+    x = def.spawnX,
+    readonly styleOverride?: CharStyleId,
+  ) {
     this.x = x;
+    this.homeX = x;
     this.y = T.floorY;
     this.prevY = this.y;
-    this.view = new RisoCharacterView(scene, def.id);
+    const phase = (styleOverride ?? def.id) * 90;
+    this.view = new RisoCharacterView(scene, def.id, phase, styleOverride);
     this.view.container.setPosition(x, this.y).setDepth(10);
     // halftone contact shadow: bottom edge pinned to the floor line at every scale
     this.shadow = scene.add.image(x, T.floorY, RISO_KEYS.charShadow(0))
@@ -69,6 +77,9 @@ export class Player {
 
   get id() {
     return this.def.id;
+  }
+  get charStyle(): CharStyleId {
+    return this.styleOverride ?? this.def.charStyle;
   }
   get left() {
     return this.x - this.w / 2;
@@ -191,7 +202,7 @@ export class Player {
     } else if (Math.abs(this.vx) > 25) {
       runPose(tMs, face, this.idle);
     } else {
-      idlePose(this.def.id, tMs, this.idle);
+      idlePose((this.charStyle % 3) as PlayerDef['id'], tMs, this.idle);
     }
 
     const c = this.view.container;

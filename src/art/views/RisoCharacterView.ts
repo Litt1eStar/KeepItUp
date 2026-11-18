@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { S } from '../../config/render';
-import type { PlayerId } from '../../config/players';
-import { CHAR_R, charMisreg, pupilPos, pupilScale } from '../characters';
+import { PLAYERS, type CharStyleId, type PlayerId } from '../../config/players';
+import { CHAR_R, PUPIL_TEX_R, STYLE_EYE_LAYOUT, charMisreg, pupilPosForStyle } from '../characters';
 import { boilVariant } from '../motion';
-import { RISO_KEYS } from '../textures';
+import { RISO_KEYS, ensureCharStyleTextures } from '../textures';
 
 export interface CharPose {
   /** Which way the character faces (flips fill + line, mirrors pupils). */
@@ -36,13 +36,26 @@ export class RisoCharacterView {
   private face: 1 | -1 = 1;
 
   /** boilPhaseMs offsets this character's linework boil so several characters don't swap in sync. */
-  constructor(private readonly scene: Phaser.Scene, readonly id: PlayerId, private readonly boilPhaseMs = 0) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    readonly id: PlayerId,
+    private readonly boilPhaseMs = 0,
+    private readonly styleOverride?: CharStyleId,
+  ) {
+    if (styleOverride !== undefined) ensureCharStyleTextures(scene);
     this.misreg = charMisreg(id);
-    this.fill = scene.add.image(0, 0, RISO_KEYS.charFill(id)).setOrigin(0.5, 1).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY);
-    this.line = scene.add.image(0, 0, RISO_KEYS.charLine(id, 0)).setOrigin(0.5, 1).setScale(S);
-    this.pupils = [0, 1].map(() => scene.add.image(0, 0, RISO_KEYS.pupil).setScale(pupilScale(id) * S));
+    const fillKey = styleOverride !== undefined ? RISO_KEYS.charStyleFill(styleOverride) : RISO_KEYS.charFill(id);
+    const lineKey = styleOverride !== undefined ? RISO_KEYS.charStyleLine(styleOverride, 0) : RISO_KEYS.charLine(id, 0);
+    const ps = (STYLE_EYE_LAYOUT[this.activeStyle].pupilRadius / PUPIL_TEX_R) * S;
+    this.fill = scene.add.image(0, 0, fillKey).setOrigin(0.5, 1).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    this.line = scene.add.image(0, 0, lineKey).setOrigin(0.5, 1).setScale(S);
+    this.pupils = [0, 1].map(() => scene.add.image(0, 0, RISO_KEYS.pupil).setScale(ps));
     this.container = scene.add.container(0, 0, [this.fill, this.line, ...this.pupils]);
     this.pose({ face: 1, lookX: 0, lookY: 0 });
+  }
+
+  get activeStyle(): CharStyleId {
+    return this.styleOverride ?? PLAYERS[this.id].charStyle;
   }
 
   /** Show/hide MULTIPLY speed lines trailing behind the character's back (they follow its squash/tilt and facing). */
@@ -69,9 +82,10 @@ export class RisoCharacterView {
 
   /** Reload character fill/line textures & pupil scale after switching character variant. */
   refreshStyle(): void {
+    if (this.styleOverride !== undefined) return;
     this.fill.setTexture(RISO_KEYS.charFill(this.id));
     this.line.setTexture(RISO_KEYS.charLine(this.id, this.variant));
-    const ps = pupilScale(this.id) * S;
+    const ps = (STYLE_EYE_LAYOUT[this.activeStyle].pupilRadius / PUPIL_TEX_R) * S;
     for (const pupil of this.pupils) pupil.setScale(ps);
     this.pose({ face: this.face, lookX: 0, lookY: 0 });
   }
@@ -90,17 +104,18 @@ export class RisoCharacterView {
     this.line.setScale(S, sy);
     this.fill.setScale(S, sy);
     for (let i = 0; i < this.pupils.length; i++) {
-      const pos = pupilPos(this.id, i, p.lookX, p.lookY, p.face, this.tmp);
+      const pos = pupilPosForStyle(this.activeStyle, i, p.lookX, p.lookY, p.face, this.tmp);
       this.pupils[i].setPosition(pos.x, pos.y).setVisible(!blink);
     }
   }
 
   /** Linework boil (swaps variant only when it changes). */
   tick(tMs: number): void {
-    const v = boilVariant(tMs + this.boilPhaseMs, this.id);
+    const v = boilVariant(tMs + this.boilPhaseMs, this.styleOverride ?? this.id);
     if (v !== this.variant) {
       this.variant = v;
-      this.line.setTexture(RISO_KEYS.charLine(this.id, v));
+      const lineKey = this.styleOverride !== undefined ? RISO_KEYS.charStyleLine(this.styleOverride, v) : RISO_KEYS.charLine(this.id, v);
+      this.line.setTexture(lineKey);
       if (this.speedlines) {
         this.speedlines.setFlipY(v === 1);
       }

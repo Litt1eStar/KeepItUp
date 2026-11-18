@@ -6,7 +6,7 @@
  * pupil, balls, ball shadows, arrows, off-screen indicators, stamps, splats, splat keylines, dots (0.5, 0.5); speedlines (1, 0.5) at the character's back (mirrored to (0, 0.5) facing left); bg/ticket/receipt (0, 0).
  */
 import type Phaser from 'phaser';
-import { PLAYERS, type PlayerId } from '../config/players';
+import { CHAR_STYLE_IDS, PLAYERS, type CharStyleId, type PlayerId } from '../config/players';
 import { RS } from '../config/render';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE } from './palette';
@@ -31,6 +31,8 @@ export const RISO_KEYS = {
   bg: 'riso:bg',
   charFill: (id: PlayerId) => `riso:char${id}:fill`,
   charLine: (id: PlayerId, v: number) => `riso:char${id}:line:${v}`,
+  charStyleFill: (style: CharStyleId) => `riso:charStyle${style}:fill`,
+  charStyleLine: (style: CharStyleId, v: number) => `riso:charStyle${style}:line:${v}`,
   pupil: 'riso:pupil',
   speedlines: 'riso:speedlines',
   ballFill: (id: PlayerId) => `riso:ball${id}:fill`,
@@ -195,6 +197,24 @@ export function refreshCharacterTextures(scene: Phaser.Scene, id?: PlayerId): vo
     canvasTexture(scene, K.arrow(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, false));
     canvasTexture(scene, K.offscreen(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, true));
     canvasTexture(scene, K.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
+  }
+}
+
+/** Generate per-style character textures (0..5) for rendering all 6 variants on screen at once. */
+export function ensureCharStyleTextures(scene: Phaser.Scene): void {
+  const K = RISO_KEYS;
+  for (const style of CHAR_STYLE_IDS) {
+    const slot = (style % 3) as PlayerId;
+    const fillKey = K.charStyleFill(style);
+    if (!scene.textures.exists(fillKey)) {
+      canvasTexture(scene, fillKey, CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterFill(c, slot, CHAR_TEX.cx, CHAR_TEX.cy, 1, style));
+    }
+    for (let v = 0; v < BOIL_VARIANTS; v++) {
+      const lineKey = K.charStyleLine(style, v);
+      if (!scene.textures.exists(lineKey)) {
+        canvasTexture(scene, lineKey, CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterLine(c, slot, CHAR_TEX.cx, CHAR_TEX.cy, v, style));
+      }
+    }
   }
 }
 

@@ -13,7 +13,7 @@ export interface PlayerInput {
 export const EMPTY_INPUT: PlayerInput = { left: false, right: false, jumpHeld: false, jumpPressed: false, dashPressed: false };
 
 export interface InputSource {
-  get(id: PlayerId): PlayerInput;
+  get(id: PlayerId, player?: unknown): PlayerInput;
 }
 
 type KeySet = { left: Phaser.Input.Keyboard.Key; right: Phaser.Input.Keyboard.Key; jump: Phaser.Input.Keyboard.Key; dash: Phaser.Input.Keyboard.Key };

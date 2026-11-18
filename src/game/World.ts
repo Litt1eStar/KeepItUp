@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import { PLAYERS, type PlayerId } from '../config/players';
+import { PLAYERS, type CharStyleId, type PlayerId } from '../config/players';
 import { Player, type LookTarget } from '../entities/Player';
 import { RISO_KEYS, ensureTargetTexture } from '../art/textures';
 import { INK, INK_HEX } from '../art/palette';
@@ -83,7 +83,7 @@ export class World extends Phaser.Events.EventEmitter {
   }
 
   get joinedIds(): PlayerId[] {
-    return this.players.map((p) => p.id);
+    return [...new Set(this.players.map((p) => p.id))];
   }
 
   playerById(id: PlayerId): Player | undefined {
@@ -92,7 +92,9 @@ export class World extends Phaser.Events.EventEmitter {
 
   /** Rebind player/ball/arrow sprite textures after regenerating player ink textures at runtime. */
   refreshPlayerArt(id: PlayerId): void {
-    this.playerById(id)?.view.refreshStyle();
+    for (const p of this.players) {
+      if (p.id === id) p.view.refreshStyle();
+    }
     this.arrows.get(id)?.setTexture(RISO_KEYS.arrow(id));
     for (const b of this.balls) {
       if (b.target === id) {
@@ -102,12 +104,16 @@ export class World extends Phaser.Events.EventEmitter {
     }
   }
 
-  addPlayer(id: PlayerId): Player {
-    const existing = this.playerById(id);
-    if (existing) return existing;
-    const p = new Player(this.scene, PLAYERS[id]);
+  addPlayer(id: PlayerId, x?: number, styleOverride?: CharStyleId): Player {
+    if (styleOverride === undefined) {
+      const existing = this.playerById(id);
+      if (existing) return existing;
+    }
+    const p = new Player(this.scene, PLAYERS[id], x ?? PLAYERS[id].spawnX, styleOverride);
     this.players.push(p);
-    this.arrows.set(id, this.scene.add.image(p.x, p.top - 30, RISO_KEYS.arrow(id)).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(25).setVisible(false));
+    if (!this.arrows.has(id)) {
+      this.arrows.set(id, this.scene.add.image(p.x, p.top - 30, RISO_KEYS.arrow(id)).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(25).setVisible(false));
+    }
     return p;
   }
 
@@ -154,7 +160,7 @@ export class World extends Phaser.Events.EventEmitter {
     }
 
     for (const p of this.players) {
-      const { jumped, dashed } = p.applyInput(input.get(p.id), dt);
+      const { jumped, dashed } = p.applyInput(input.get(p.id, p), dt);
       if (jumped) {
         this.emit('jump', p);
         for (const rider of ridersByBase.get(p) ?? []) {

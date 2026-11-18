@@ -11,21 +11,40 @@ import { EMPTY_INPUT, type InputSource, type PlayerInput } from './InputManager'
  */
 export class BotInput implements InputSource {
   private out = new Map<PlayerId, PlayerInput>();
+  private outByPlayer = new Map<Player, PlayerInput>();
   private aimJitter = new Map<Ball, number>();
   private willJump = new Map<Ball, boolean>();
+  private tickCount = 0;
 
   constructor(private readonly world: World, private readonly rng: () => number = Math.random) {}
 
   update(): void {
-    for (const p of this.world.players) this.out.set(p.id, this.think(p));
+    this.tickCount++;
+    for (const p of this.world.players) {
+      const inp = this.think(p);
+      this.outByPlayer.set(p, inp);
+      this.out.set(p.id, inp);
+    }
   }
 
-  get(id: PlayerId): PlayerInput {
-    return this.out.get(id) ?? EMPTY_INPUT;
+  get(id: PlayerId, player?: Player): PlayerInput {
+    return (player ? this.outByPlayer.get(player) : undefined) ?? this.out.get(id) ?? EMPTY_INPUT;
   }
 
   private think(p: Player): PlayerInput {
-    const mine = this.world.balls.filter((b) => b.target === p.id);
+    const mine = this.world.balls.filter((b) => {
+      if (b.target !== p.id) return false;
+      // If multiple floor showcase characters share a color slot, only the nearest one chases the ball.
+      let best = p;
+      let bestDist = Math.abs(p.x - b.x);
+      for (const o of this.world.players) {
+        if (o.id === p.id && Math.abs(o.x - b.x) < bestDist) {
+          best = o;
+          bestDist = Math.abs(o.x - b.x);
+        }
+      }
+      return best === p;
+    });
     if (mine.length === 0) return this.drift(p);
     // Most urgent = lowest ball.
     const ball = mine.reduce((a, b) => (b.bottom > a.bottom ? b : a));
@@ -64,19 +83,28 @@ export class BotInput implements InputSource {
     return input;
   }
 
-  /** No ball for me: get out of the way of teammates' landing spots, else go home. */
+  /** No ball for me: get out of the way of teammates' landing spots, else patrol and hop around homeX. */
   private drift(p: Player): PlayerInput {
     for (const b of this.world.balls) {
       const { x: landX } = predict(b, p.top - b.r);
       const away = p.x - landX;
-      if (Math.abs(away) < 130) {
+      if (Math.abs(away) < 110) {
         let dir = Math.sign(away) || 1;
         if ((dir < 0 && p.x < 90) || (dir > 0 && p.x > T.width - 90)) dir = -dir; // cornered: go the other way
         return { ...EMPTY_INPUT, left: dir < 0, right: dir > 0 };
       }
     }
-    const dx = p.def.spawnX - p.x;
-    return { ...EMPTY_INPUT, left: dx < -20, right: dx > 20 };
+    const phase = p.homeX * 0.019 + p.charStyle * 1.1;
+    const patrolX = p.homeX + Math.sin(this.tickCount * 0.045 + phase) * 48;
+    const dx = patrolX - p.x;
+    const hop = p.grounded && (this.tickCount + p.charStyle * 29) % 110 === 0;
+    return {
+      left: dx < -10,
+      right: dx > 10,
+      jumpPressed: hop,
+      jumpHeld: hop || (!p.grounded && p.vy < 0),
+      dashPressed: false,
+    };
   }
 }
 

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import { PLAYERS, resetPlayerCharStyles, setPlayerCharStyle, type CharStyleId } from '../config/players';
+import { CHAR_STYLE_IDS, type PlayerId } from '../config/players';
 import { InputManager } from '../input/InputManager';
 import { BotInput } from '../input/BotInput';
 import { World, type BumpEvent, type HitEvent } from '../game/World';
@@ -9,9 +9,9 @@ import { drawStage } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
 import { leaderboard } from '../services/Leaderboard';
-import { INK, INK_HEX, PAPER, PAPER_HEX, playerColor } from '../art/palette';
+import { INK, INK_HEX, PAPER, PAPER_HEX, playerColor, styleColor } from '../art/palette';
 import { risoText } from '../art/type';
-import { RISO_KEYS, ensureCrewCardTexture, refreshCharacterTextures, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
+import { RISO_KEYS, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
 import { RECEIPT } from '../art/ui';
 import { slamScale } from '../art/motion';
 import { demoStripVisible } from '../art/hud';
@@ -24,12 +24,11 @@ import type { Player } from '../entities/Player';
 const MULTIPLY = Phaser.BlendModes.MULTIPLY;
 const CARD_W = 276;
 const CARD_H = 176;
-const CREW_CARD = { x: 324, y: 148, w: 324, h: 176 } as const;
-const CREW_ROTATE_MS = 3500;
+const FLOOR_CHAR_XS = [110, 255, 400, 545, 690, 835] as const;
 
 /**
- * Booth Main Menu ("zine poster cover"): all 3 bots run, jump and juggle a live ball
- * behind a bold riso masthead, a 3-item menu card (Play, Controls, Top Teams), the 6-character showcase card, and the receipt.
+ * Booth Main Menu ("zine poster cover"): all 6 character variants run, jump and juggle a live ball
+ * across the floor behind a bold riso masthead, a 3-item menu card (Play, Controls, Top Teams) and the receipt.
  */
 export class MenuScene extends Phaser.Scene {
   private inputMgr!: InputManager;
@@ -43,16 +42,12 @@ export class MenuScene extends Phaser.Scene {
   private now = 0;
   private slammedAt = -Infinity;
   private lastItemScale = 1;
-  private crewSlammedAt = -Infinity;
-  private lastCrewScale = 1;
-  private crewTimerMs = 0;
   private receiptSlammedAt = -Infinity;
   private lastReceiptScale = 1;
   private lastHintVis = true;
 
   private menuTexts: Phaser.GameObjects.Text[] = [];
   private arrow!: Phaser.GameObjects.Image;
-  private crewImg!: Phaser.GameObjects.Image;
   private receiptImg!: Phaser.GameObjects.Image;
   private hintText!: Phaser.GameObjects.Text;
 
@@ -77,29 +72,25 @@ export class MenuScene extends Phaser.Scene {
     this.now = 0;
     this.slammedAt = -Infinity;
     this.lastItemScale = 1;
-    this.crewSlammedAt = -Infinity;
-    this.lastCrewScale = 1;
-    this.crewTimerMs = 0;
     this.receiptSlammedAt = -Infinity;
     this.lastReceiptScale = 1;
     this.lastHintVis = true;
     this.menuTexts = [];
 
-    resetPlayerCharStyles();
-    refreshCharacterTextures(this);
     AudioManager.init(this);
     drawStage(this);
     this.inputMgr = new InputManager(this);
     this.world = new World(this, false);
     this.juice = new Juice(this);
-    for (const p of PLAYERS) this.world.addPlayer(p.id);
+    for (const style of CHAR_STYLE_IDS) {
+      this.world.addPlayer((style % 3) as PlayerId, FLOOR_CHAR_XS[style], style);
+    }
     this.bot = new BotInput(this.world);
     this.spawnDemoBall(480);
 
     this.wireWorldFx();
     this.buildMasthead();
     this.buildMenuCard();
-    this.buildCrewCard();
     this.buildReceipt();
 
     this.hintText = this.add
@@ -121,8 +112,6 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown', this.onKeyDown);
     this.events.once('shutdown', () => {
       this.input.keyboard?.off('keydown', this.onKeyDown);
-      resetPlayerCharStyles();
-      refreshCharacterTextures(this);
       this.roller.destroy();
       this.world.destroy();
     });
@@ -136,16 +125,16 @@ export class MenuScene extends Phaser.Scene {
 
   private wireWorldFx(): void {
     this.world.on('hit', (e: HitEvent) => {
-      this.juice.splat(e.ball.x, e.ball.bottom, playerColor(e.player.id).hex, e.jumpHit ? 'jump' : 'hit');
+      this.juice.splat(e.ball.x, e.ball.bottom, styleColor(e.player.charStyle).hex, e.jumpHit ? 'jump' : 'hit');
     });
     this.world.on('jump', (p: Player) => {
-      this.juice.splat(p.x, p.y - 4, playerColor(p.id).hex, 'small', 1);
+      this.juice.splat(p.x, p.y - 4, styleColor(p.charStyle).hex, 'small', 1);
     });
     this.world.on('dash', (p: Player) => {
-      this.juice.splat(p.x, p.y - 16, playerColor(p.id).hex, 'small', 1);
+      this.juice.splat(p.x, p.y - 16, styleColor(p.charStyle).hex, 'small', 1);
     });
     this.world.on('land', (p: Player) => {
-      this.juice.splat(p.x, p.y - 4, playerColor(p.id).hex, 'small', 1);
+      this.juice.splat(p.x, p.y - 4, styleColor(p.charStyle).hex, 'small', 1);
     });
     this.world.on('bump', (e: BumpEvent) => {
       this.juice.splat(e.x, e.y, playerColor(e.ink).hex, 'hit', 2);
@@ -219,36 +208,6 @@ export class MenuScene extends Phaser.Scene {
       });
       this.menuTexts.push(item);
     });
-  }
-
-  private buildCrewCard(): void {
-    ensureCrewCardTexture(this, CREW_CARD.w, CREW_CARD.h);
-    this.crewImg = this.add
-      .image(CREW_CARD.x + CREW_CARD.w / 2, CREW_CARD.y + CREW_CARD.h / 2, RISO_KEYS.crewCard)
-      .setOrigin(0.5)
-      .setScale(S)
-      .setDepth(5)
-      .setInteractive({ useHandCursor: true });
-    this.crewImg.on('pointerdown', () => {
-      if (this.controlsMenu.isOpen || this.roller.isExiting) return;
-      this.crewTimerMs = 0;
-      this.cycleDemoCrew(true);
-    });
-  }
-
-  private cycleDemoCrew(playSfx: boolean): void {
-    for (const p of PLAYERS) {
-      setPlayerCharStyle(p.id, ((p.charStyle + 3) % 6) as CharStyleId);
-    }
-    refreshCharacterTextures(this);
-    for (const p of PLAYERS) {
-      this.world.refreshPlayerArt(p.id);
-      const live = this.world.playerById(p.id);
-      if (live) this.juice.splat(live.x, live.y - 24, playerColor(p.id).hex, 'small', 1);
-    }
-    this.crewSlammedAt = this.now;
-    this.lastCrewScale = NaN;
-    if (playSfx) AudioManager.play('select');
   }
 
   private async buildReceipt(): Promise<void> {
@@ -325,20 +284,6 @@ export class MenuScene extends Phaser.Scene {
     if (recS !== this.lastReceiptScale && this.receiptImg) {
       this.lastReceiptScale = recS;
       this.receiptImg.setScale(S * recS);
-    }
-
-    const crewS = slamScale(time - this.crewSlammedAt);
-    if (crewS !== this.lastCrewScale && this.crewImg) {
-      this.lastCrewScale = crewS;
-      this.crewImg.setScale(S * crewS);
-    }
-
-    if (!this.controlsMenu.isOpen) {
-      this.crewTimerMs += delta;
-      if (this.crewTimerMs >= CREW_ROTATE_MS) {
-        this.crewTimerMs = 0;
-        this.cycleDemoCrew(false);
-      }
     }
 
     const hintVis = demoStripVisible(time);
