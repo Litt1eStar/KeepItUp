@@ -73,8 +73,8 @@ export const TUNING = {
   jumpBufferTime: 0.09, // s before landing where a jump press is buffered
 
   // Dash
-  dashSpeed: 1100, // [doc] px/s
-  dashDuration: 0.16, // [doc] s
+  dashSpeed: 900, // [doc] px/s
+  dashDuration: 0.13, // [doc] s
   dashCooldown: 0.6, // [doc] s
 
   // Dash-pass (new)
@@ -111,10 +111,10 @@ export const TUNING = {
   attractMaxS: 45, // attract demo restarts/returns after this long
 
   // Player bump & trampoline physics
-  dashBumpVx: 720, // horizontal launch speed imparted when dashing into a teammate
+  dashBumpVx: 560, // horizontal launch speed imparted when dashing into a teammate
   dashBumpVy: 240, // upward hop imparted when dashing into a teammate
   dashBumpRecoilVx: 160, // recoil on the dashing player
-  bumpDecayDecel: 1800, // px/s² decay when knocked faster than moveSpeed
+  bumpDecayDecel: 2600, // px/s² decay when knocked faster than moveSpeed
   stackLaunchVy: 800, // upward launch given to a rider when the base player jumps
 
   // Ball spin & momentum transfer
