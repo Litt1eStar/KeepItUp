@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CONTROL_ACTIONS, PLAYERS, type PlayerId } from '../config/players';
+import { AudioManager } from '../systems/AudioManager';
 
 /** One frame of intent for a player, regardless of whether it came from keys, a pad or a bot. */
 export interface PlayerInput {
@@ -41,6 +42,7 @@ export class InputManager implements InputSource {
   private keys: KeySet[] = [];
   private startKeys: Phaser.Input.Keyboard.Key[] = [];
   private fullscreenKey: Phaser.Input.Keyboard.Key;
+  private muteKey: Phaser.Input.Keyboard.Key | null = null;
   private latchHandlers = new Map<Phaser.Input.Keyboard.Key, () => void>();
   private latched = new Set<Phaser.Input.Keyboard.Key>();
   private prevJump = [false, false, false];
@@ -68,11 +70,19 @@ export class InputManager implements InputSource {
     if (!this.isKeyBound('F')) this.scene.scale.toggleFullscreen();
   };
 
+  private readonly onMute = (): void => {
+    if (!this.isKeyBound('M')) AudioManager.toggleMute();
+  };
+
   constructor(private readonly scene: Phaser.Scene) {
     const kb = scene.input.keyboard!;
     this.startKeys = [kb.addKey('SPACE'), kb.addKey('ENTER')];
     this.fullscreenKey = kb.addKey('F');
     this.fullscreenKey.on('down', this.onFullscreen);
+    if (scene.scene.key !== 'GameOver') {
+      this.muteKey = kb.addKey('M');
+      this.muteKey.on('down', this.onMute);
+    }
     this.rebind();
 
     // Phaser reuses Key objects when a scene restarts, so drop our listeners on shutdown
@@ -80,6 +90,7 @@ export class InputManager implements InputSource {
     scene.events.once('shutdown', () => {
       this.clearKeyHandlers();
       this.fullscreenKey.off('down', this.onFullscreen);
+      this.muteKey?.off('down', this.onMute);
     });
   }
 

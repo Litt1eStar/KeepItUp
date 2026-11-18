@@ -80,6 +80,8 @@ export class GameOverScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     AudioManager.init(this);
+    AudioManager.setMusic('menu');
+    AudioManager.setMusicDucked(true);
     drawStage(this);
     ensureReportTextures(this);
     this.inputMgr = new InputManager(this);

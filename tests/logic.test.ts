@@ -9,6 +9,7 @@ import {
 } from '../src/logic/movement';
 import { LocalLeaderboard, type KeyValueStore } from '../src/services/Leaderboard';
 import { TUNING } from '../src/config/tuning';
+import { BGM_LOOP_STEPS, BGM_PATTERNS, midiToHz } from '../src/systems/AudioManager';
 
 const seq = (...vals: number[]) => {
   let i = 0;
@@ -232,5 +233,18 @@ describe('movement physics', () => {
     expect(a.vx).toBeLessThan(0);
     expect(b.vx).toBeGreaterThan(0);
     expect(b.vy).toBe(-240);
+  });
+});
+
+describe('AudioManager BGM', () => {
+  it('converts MIDI notes to Hz and defines 32-step menu/play patterns', () => {
+    expect(midiToHz(69)).toBeCloseTo(440);
+    expect(midiToHz(60)).toBeCloseTo(261.6256, 3);
+    for (const mode of ['menu', 'play'] as const) {
+      expect(BGM_PATTERNS[mode].bass).toHaveLength(BGM_LOOP_STEPS);
+      expect(BGM_PATTERNS[mode].lead).toHaveLength(BGM_LOOP_STEPS);
+      expect(BGM_PATTERNS[mode].bass.some((n) => n > 0)).toBe(true);
+      expect(BGM_PATTERNS[mode].lead.some((n) => n > 0)).toBe(true);
+    }
   });
 });

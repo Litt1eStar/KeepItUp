@@ -78,6 +78,8 @@ export class MenuScene extends Phaser.Scene {
     this.menuTexts = [];
 
     AudioManager.init(this);
+    AudioManager.setMusicDucked(false);
+    AudioManager.setMusic('menu');
     drawStage(this);
     this.inputMgr = new InputManager(this);
     this.world = new World(this, false);

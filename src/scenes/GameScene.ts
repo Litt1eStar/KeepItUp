@@ -101,6 +101,8 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     AudioManager.init(this);
+    AudioManager.setMusicDucked(false);
+    AudioManager.setMusic(this.attract ? 'menu' : 'play');
     drawStage(this);
     this.inputMgr = new InputManager(this);
     this.world = new World(this, true);
@@ -117,8 +119,14 @@ export class GameScene extends Phaser.Scene {
     this.roller = new PrintRoller(this);
     if (!this.attract) {
       this.pauseMenu = new PauseMenu(this, {
-        onResume: () => this.inputMgr.clearLatched(),
-        onLobby: () => this.roller.exitTo('Lobby'),
+        onResume: () => {
+          this.inputMgr.clearLatched();
+          AudioManager.setMusicDucked(false);
+        },
+        onLobby: () => {
+          AudioManager.setMusicDucked(false);
+          this.roller.exitTo('Lobby');
+        },
         onRebind: () => {
           this.inputMgr.rebind();
           refreshTicketTextures(this);
@@ -242,6 +250,7 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     this.over = true;
     this.pauseMenu?.hide();
+    AudioManager.setMusicDucked(true);
     this.timeScale = T.slowMoScale;
     AudioManager.play('gameover');
     // Big pink ink splat on the floor line under the dropped ball + DROPPED stamp. No flash; one tiny
@@ -272,7 +281,10 @@ export class GameScene extends Phaser.Scene {
     if (this.roller.isExiting) return;
     this.inputMgr.update();
     this.pauseMenu?.tick(time, this.inputMgr);
-    if (this.pauseMenu?.isOpen) return;
+    if (this.pauseMenu?.isOpen) {
+      AudioManager.setMusicDucked(true);
+      return;
+    }
     if (!this.attract && !this.over && this.inputMgr.padStartPressed()) {
       this.pauseMenu?.show(time);
       return;

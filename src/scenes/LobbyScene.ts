@@ -77,6 +77,8 @@ export class LobbyScene extends Phaser.Scene {
     this.cards = [];
     this.lastHintVis = true;
     AudioManager.init(this);
+    AudioManager.setMusicDucked(false);
+    AudioManager.setMusic('menu');
     drawStage(this);
     this.inputMgr = new InputManager(this);
     this.world = new World(this, false);
