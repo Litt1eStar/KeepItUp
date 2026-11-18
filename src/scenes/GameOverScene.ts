@@ -5,7 +5,7 @@ import { InputManager } from '../input/InputManager';
 import { drawStage } from '../game/stage';
 import { AudioManager } from '../systems/AudioManager';
 import { leaderboard } from '../services/Leaderboard';
-import { INK, INK_HEX, PAPER } from '../art/palette';
+import { INK, INK_HEX, PAPER, PAPER_HEX } from '../art/palette';
 import { risoText } from '../art/type';
 import { RISO_KEYS, ensureReportTextures, renderGameOverReceipt } from '../art/textures';
 import { slamScale } from '../art/motion';
@@ -15,19 +15,21 @@ import { StampSlam } from '../art/views/StampSlam';
 import { PrintRoller } from '../art/views/PrintRoller';
 import {
   GAME_OVER, boardCountdownLabel, entryCountdownLabel, formatDotRow,
-  mvpAwardLabel, reportLinesVisible, slotRotation, slotX, teamLabel,
+  mvpAwardLabel, promptBlinkVisible, reportLinesVisible, teamLabel,
 } from '../art/screens';
 import type { GameResult } from './GameScene';
 
 const MULTIPLY = Phaser.BlendModes.MULTIPLY;
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -!';
-const NAME_LEN = 8;
+const ALLOWED_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -!';
+const MAX_NAME_LEN = 12;
+const INPUT_W = 432;
+const INPUT_H = 62;
 const DEFAULT_NAMES = ['BOUNCERS', 'SKYHIGH', 'NOFLOOR', 'JUGGLERS', 'AIRTIME', 'UPUPUP', 'BALLERS', 'FLOATERS'];
 type ReportItem = Phaser.GameObjects.Text | Phaser.GameObjects.Image;
 
 /**
  * Game over ("ROUND REPORT" receipt): stats print line by line in steps,
- * arcade rubber-stamp name entry (works with gamepads), and full Top 10 receipt.
+ * direct keyboard team-name entry (Enter or Gamepad Start to stamp), and full Top 10 receipt.
  * Auto-submits and returns to the lobby when left alone so the booth never gets stuck.
  */
 export class GameOverScene extends Phaser.Scene {
@@ -35,20 +37,18 @@ export class GameOverScene extends Phaser.Scene {
   private inputMgr!: InputManager;
   private roller!: PrintRoller;
   private state: 'loading' | 'entry' | 'board' = 'loading';
-  private name: string[] = [];
-  private cursor = 0;
-  private shownCursor = 0;
+  private teamName = '';
+  private fallbackName = 'TEAM';
   private idle = 0;
   private now = 0;
   private reportStartMs = -1;
   private reportRevealed = 0;
   private reportLines: ReportItem[][] = [];
   private newBestSlam: StampSlam | null = null;
-  private slotBoxes: Phaser.GameObjects.Image[] = [];
-  private slots: Phaser.GameObjects.Text[] = [];
-  private slotSlammedAt: number[] = [];
-  private slotShownScale: number[] = [];
-  private cursorMarker!: Phaser.GameObjects.Image;
+  private nameText!: Phaser.GameObjects.Text;
+  private nameSlammedAt = -Infinity;
+  private nameShownScale = 1;
+  private lastCaretVis = true;
   private countdown!: Phaser.GameObjects.Text;
   private shownCountdown = '';
   private entryLayer: Phaser.GameObjects.GameObject[] = [];
@@ -60,22 +60,19 @@ export class GameOverScene extends Phaser.Scene {
   init(result: GameResult): void {
     this.result = result;
     this.state = 'loading';
-    this.cursor = 0;
-    this.shownCursor = 0;
+    this.teamName = '';
+    this.fallbackName = DEFAULT_NAMES[Math.floor(Math.random() * DEFAULT_NAMES.length)];
     this.idle = 0;
     this.now = 0;
     this.reportStartMs = -1;
     this.reportRevealed = 0;
     this.reportLines = [];
     this.newBestSlam = null;
-    this.slotBoxes = [];
-    this.slots = [];
-    this.slotSlammedAt = [];
-    this.slotShownScale = [];
+    this.nameSlammedAt = -Infinity;
+    this.nameShownScale = 1;
+    this.lastCaretVis = true;
     this.shownCountdown = '';
     this.entryLayer = [];
-    const def = DEFAULT_NAMES[Math.floor(Math.random() * DEFAULT_NAMES.length)].padEnd(NAME_LEN, ' ');
-    this.name = def.split('');
   }
 
   async create(): Promise<void> {
@@ -168,55 +165,50 @@ export class GameOverScene extends Phaser.Scene {
   private showEntry(): void {
     this.state = 'entry';
     const e = GAME_OVER.entry;
+    const boxY = e.slotY - INPUT_H / 2;
+    const bg = this.add.rectangle(e.x, boxY, INPUT_W, INPUT_H, PAPER_HEX).setOrigin(0).setDepth(5);
+    const frame = this.add.graphics().setDepth(6);
+    frame.lineStyle(2.5, INK_HEX.pink).strokeRect(e.x, boxY, INPUT_W, INPUT_H);
+    frame.lineStyle(1, INK_HEX.black).strokeRect(e.x + 4, boxY + 4, INPUT_W - 8, INPUT_H - 8);
+
+    this.nameText = this.add
+      .text(e.x + 18, e.slotY + 1, '_', risoText(34, INK.black))
+      .setOrigin(0, 0.5)
+      .setBlendMode(MULTIPLY)
+      .setDepth(7);
+
     this.entryLayer.push(
+      bg,
+      frame,
+      this.nameText,
       this.add.text(e.x + 2, e.titleY + 2, 'MADE THE BOARD!', risoText(e.titleSize, INK.black)).setBlendMode(MULTIPLY).setDepth(6),
       this.add.text(e.x, e.titleY, 'MADE THE BOARD!', risoText(e.titleSize, INK.pink)).setBlendMode(MULTIPLY).setDepth(6),
       this.add.text(e.x, e.subY, 'STAMP YOUR TEAM NAME', risoText(e.subSize, INK.black, 'mono')).setFontStyle('bold').setBlendMode(MULTIPLY).setDepth(6),
-    );
-
-    for (let i = 0; i < NAME_LEN; i++) {
-      const sx = slotX(i);
-      const rot = slotRotation(i);
-      const active = i === this.cursor;
-      const box = this.add
-        .image(sx, e.slotY, RISO_KEYS.letterBox)
-        .setScale(S)
-        .setRotation(rot)
-        .setTint(active ? INK_HEX.pink : INK_HEX.black)
-        .setBlendMode(MULTIPLY)
-        .setDepth(6);
-      const letter = this.add
-        .text(sx, e.slotY + 1, this.name[i], risoText(e.slotFontSize, active ? INK.pink : INK.black))
-        .setOrigin(0.5)
-        .setRotation(rot)
-        .setBlendMode(MULTIPLY)
-        .setDepth(7);
-      this.slotBoxes.push(box);
-      this.slots.push(letter);
-      this.slotSlammedAt.push(-Infinity);
-      this.slotShownScale.push(1);
-      this.entryLayer.push(box, letter);
-    }
-
-    this.cursorMarker = this.add
-      .image(slotX(this.cursor), e.slotY - 48, RISO_KEYS.arrow(0))
-      .setScale(S * 0.75)
-      .setBlendMode(MULTIPLY)
-      .setDepth(7);
-    this.entryLayer.push(
-      this.cursorMarker,
       this.add
-        .text(e.x, e.hintY, 'TYPE NAME · ◀ ▶ MOVE · ↑ ↓ / PAD LETTER\nSPACE / ENTER / START = STAMP TEAM', risoText(e.hintSize, INK.black, 'mono'))
+        .text(
+          e.x,
+          e.hintY,
+          'TYPE NAME ON KEYBOARD · BACKSPACE = DELETE\nENTER / PAD START = STAMP TEAM (BLANK = RANDOM)',
+          risoText(e.hintSize, INK.black, 'mono'),
+        )
         .setFontStyle('bold')
         .setBlendMode(MULTIPLY)
         .setDepth(6),
     );
+    this.refreshNameText();
+  }
+
+  private refreshNameText(): void {
+    const caret = promptBlinkVisible(this.now);
+    this.lastCaretVis = caret;
+    const display = this.teamName.length > 0 ? `${this.teamName}${caret ? '_' : ''}` : caret ? '_' : '';
+    this.nameText?.setText(display);
   }
 
   private async submit(): Promise<void> {
     if (this.state !== 'entry') return;
     this.state = 'loading';
-    const team = this.name.join('').trim() || 'TEAM';
+    const team = this.teamName.trim() || this.fallbackName;
     const { rank } = await leaderboard.submit({
       team,
       score: this.result.score,
@@ -227,8 +219,6 @@ export class GameOverScene extends Phaser.Scene {
     AudioManager.play('milestone');
     for (const o of this.entryLayer) o.destroy();
     this.entryLayer = [];
-    this.slotBoxes = [];
-    this.slots = [];
     void this.showBoard(rank);
   }
 
@@ -286,95 +276,47 @@ export class GameOverScene extends Phaser.Scene {
     this.countdown.setText(text);
   }
 
-  private moveCursor(delta: -1 | 1): void {
-    this.cursor = (this.cursor + delta + NAME_LEN) % NAME_LEN;
-    AudioManager.play('select');
-  }
-
-  private stepChar(delta: -1 | 1): void {
-    const idx = ALPHABET.indexOf(this.name[this.cursor]);
-    const next = (idx + delta + ALPHABET.length) % ALPHABET.length;
-    this.name[this.cursor] = ALPHABET[next];
-    this.slots[this.cursor].setText(ALPHABET[next]);
-    this.slotSlammedAt[this.cursor] = this.now;
-    AudioManager.play('select');
-  }
-
   private handleEntryKey(event: KeyboardEvent): void {
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
     const code = event.code;
-    if (code === 'ArrowLeft') {
+    if (code === 'Enter' || code === 'NumpadEnter') {
       event.preventDefault?.();
-      this.idle = 0;
-      this.moveCursor(-1);
-      return;
-    }
-    if (code === 'ArrowRight') {
-      event.preventDefault?.();
-      this.idle = 0;
-      this.moveCursor(1);
-      return;
-    }
-    if (code === 'ArrowUp') {
-      event.preventDefault?.();
-      this.idle = 0;
-      this.stepChar(1);
-      return;
-    }
-    if (code === 'ArrowDown') {
-      event.preventDefault?.();
-      this.idle = 0;
-      this.stepChar(-1);
+      void this.submit();
       return;
     }
     if (code === 'Backspace') {
       event.preventDefault?.();
       this.idle = 0;
-      this.name[this.cursor] = ' ';
-      this.slots[this.cursor].setText(' ');
-      this.slotSlammedAt[this.cursor] = this.now;
-      if (this.cursor > 0) this.cursor--;
-      AudioManager.play('select');
+      if (this.teamName.length > 0) {
+        this.teamName = this.teamName.slice(0, -1);
+        this.nameSlammedAt = this.now;
+        this.refreshNameText();
+        AudioManager.play('select');
+      }
       return;
     }
     const ch = event.key.length === 1 ? event.key.toUpperCase() : '';
-    if (ch && ch !== ' ' && ALPHABET.includes(ch)) {
+    if (ch && ALLOWED_CHARS.includes(ch) && this.teamName.length < MAX_NAME_LEN) {
       event.preventDefault?.();
       this.idle = 0;
-      this.name[this.cursor] = ch;
-      this.slots[this.cursor].setText(ch);
-      this.slotSlammedAt[this.cursor] = this.now;
-      this.cursor = Math.min(NAME_LEN - 1, this.cursor + 1);
+      if (ch === ' ' && this.teamName.length === 0) return;
+      this.teamName += ch;
+      this.nameSlammedAt = this.now;
+      this.refreshNameText();
       AudioManager.play('select');
     }
   }
 
   private updateEntry(): void {
-    const dir = this.inputMgr.padMenuDir();
-    if (dir.left) this.moveCursor(-1);
-    if (dir.right) this.moveCursor(1);
-    if (dir.up || this.inputMgr.padConfirmPressed()) this.stepChar(1);
-    else if (dir.down || this.inputMgr.padBackPressed()) this.stepChar(-1);
+    const caret = promptBlinkVisible(this.now);
+    if (caret !== this.lastCaretVis) this.refreshNameText();
 
-    if (this.cursor !== this.shownCursor) {
-      this.slotBoxes[this.shownCursor].setTint(INK_HEX.black);
-      this.slots[this.shownCursor].setColor(INK.black);
-      this.slotBoxes[this.cursor].setTint(INK_HEX.pink);
-      this.slots[this.cursor].setColor(INK.pink);
-      this.cursorMarker.setX(slotX(this.cursor));
-      this.slotSlammedAt[this.cursor] = this.now;
-      this.shownCursor = this.cursor;
+    const k = slamScale(this.now - this.nameSlammedAt);
+    if (k !== this.nameShownScale) {
+      this.nameShownScale = k;
+      this.nameText.setScale(1, k);
     }
 
-    for (let i = 0; i < NAME_LEN; i++) {
-      const k = slamScale(this.now - this.slotSlammedAt[i]);
-      if (k !== this.slotShownScale[i]) {
-        this.slotShownScale[i] = k;
-        this.slotBoxes[i].setScale(S * k);
-        this.slots[i].setScale(k);
-      }
-    }
-
-    if (this.inputMgr.startPressed()) void this.submit();
+    if (this.inputMgr.padStartPressed()) void this.submit();
   }
 }
