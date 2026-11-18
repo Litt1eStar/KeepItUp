@@ -159,3 +159,30 @@ export function drawShadow(ctx: Ctx, r: number, n: number, color: string, angle 
   ctx.fill();
   ctx.restore();
 }
+
+/** Incoming spawn halo texture size (logical square) derived from ball radius r. */
+export function incomingTexSize(r: number): number {
+  return Math.ceil(r * 3.1);
+}
+
+/** Halftone "incoming" circle + dashed wobbly black target ring shown while a new ball floats in. */
+export function drawIncomingRing(ctx: Ctx, id: PlayerId, r: number): void {
+  const size = incomingTexSize(r);
+  const c = size / 2;
+  const ink = INK[PLAYER_INK[id]];
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(c, c, r * 1.42, 0, Math.PI * 2);
+  ctx.arc(c, c, r * 1.04, 0, Math.PI * 2);
+  ctx.clip('evenodd');
+  fillHalftone(ctx, 0, 0, size, size, ink, 0.28, Math.max(3, r * 0.11), INK_ANGLE[PLAYER_INK[id]], { jitterSeed: 980 + id });
+  ctx.restore();
+
+  ctx.save();
+  ctx.setLineDash([5, 5]);
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = INK.black;
+  tracePath(ctx, wobblePoints(circlePoints(c, c, r * 1.38, 40), 990 + id, Math.max(0.4, r * 0.012)));
+  ctx.stroke();
+  ctx.restore();
+}

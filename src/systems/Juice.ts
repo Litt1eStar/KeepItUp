@@ -3,12 +3,13 @@ import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
 import { INK, INK_HEX, hexToCss, type InkName } from '../art/palette';
 import { risoText } from '../art/type';
-import { RISO_KEYS, BOIL_VARIANTS } from '../art/textures';
+import { RISO_KEYS, BOIL_VARIANTS, ensureFaintStamp } from '../art/textures';
 import { slamScale } from '../art/motion';
 import { STAMP_INK, stampTint, type StampId } from '../art/ui';
 import { splatNeedsKeyline } from '../art/splat';
 import {
-  BANNER_MS, LOCAL_STAMP_MS, SPLAT_HOLD_STEPS, SPLAT_SIZE_MUL, popupRise, readableInk, splatScale, stampMinY, type SplatSize,
+  BANNER_FAINT_MS, BANNER_MS, LOCAL_STAMP_MS, SPLAT_HOLD_STEPS, SPLAT_SIZE_MUL, bannerPhase,
+  popupRise, readableInk, splatScale, stampMinY, type SplatSize,
 } from '../art/hud';
 import { StampSlam } from '../art/views/StampSlam';
 import { STAGE_QUIET_Y } from '../art/stage';
@@ -38,9 +39,12 @@ interface PopupFx {
 }
 
 interface StampFx {
+  id: StampId;
   slam: StampSlam;
   born: number;
   life: number;
+  faint: number;
+  faintShown: boolean;
   label: Phaser.GameObjects.Text | null;
   labelScale: number;
 }
@@ -51,6 +55,8 @@ export interface BannerOpts {
   ink?: InkName | number;
   /** ms before it disappears; Infinity = until the scene ends. */
   holdMs?: number;
+  /** Extra ms to linger as a faint halftone ghost print after `holdMs`. */
+  faintMs?: number;
   scale?: number;
 }
 
@@ -109,10 +115,19 @@ export class Juice {
     }
     const b = this.currentBanner;
     if (b) {
-      if (tMs - b.born >= b.life) {
+      const phase = bannerPhase(tMs - b.born, b.life, b.faint);
+      if (phase === 'done') {
         destroyStamp(b);
         this.currentBanner = null;
-      } else tickStamp(b, tMs);
+      } else {
+        if (phase === 'faint' && !b.faintShown) {
+          b.faintShown = true;
+          ensureFaintStamp(this.scene, b.id);
+          b.slam.image.setTexture(RISO_KEYS.stampFaint(b.id));
+          b.label?.setVisible(false);
+        }
+        tickStamp(b, tMs);
+      }
     }
   }
 
@@ -165,7 +180,7 @@ export class Juice {
     slam.image.setPosition(Phaser.Math.Clamp(x, 70, T.width - 70), Math.max(stampMinY(scale), y)).setDepth(DEPTH.stamp);
     slam.trigger(this.now);
     slam.tick(this.now);
-    this.stamps.push({ slam, born: this.now, life: LOCAL_STAMP_MS, label: null, labelScale: NaN });
+    this.stamps.push({ id, slam, born: this.now, life: LOCAL_STAMP_MS, faint: 0, faintShown: false, label: null, labelScale: NaN });
   }
 
   /** Big centre stamp (+1 BALL, COMBO n, DROPPED). A new banner replaces the current one so they never overlap. */
@@ -181,7 +196,16 @@ export class Juice {
         .setOrigin(0.5, 0).setRotation(0.05).setBlendMode(MULTIPLY).setDepth(DEPTH.banner);
     }
     slam.trigger(this.now);
-    const b: StampFx = { slam, born: this.now, life: opts.holdMs ?? BANNER_MS, label, labelScale: NaN };
+    const b: StampFx = {
+      id,
+      slam,
+      born: this.now,
+      life: opts.holdMs ?? BANNER_MS,
+      faint: opts.faintMs ?? (id === 'COMBO' ? BANNER_FAINT_MS : 0),
+      faintShown: false,
+      label,
+      labelScale: NaN,
+    };
     tickStamp(b, this.now);
     this.currentBanner = b;
   }

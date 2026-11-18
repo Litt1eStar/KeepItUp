@@ -78,8 +78,10 @@ export class Ball {
       v.setInk(this.target, time);
     }
     v.container.setPosition(this.x, this.y);
-    // Floating spawn telegraph: stepped scale pulse (no alpha fades).
-    v.setScaleMul(this.floatTime > 0 ? spawnPulse(time) : 1);
+    // Floating spawn telegraph: stepped scale pulse + incoming halftone halo (no alpha fades).
+    const spawning = this.floatTime > 0;
+    v.setSpawning(spawning);
+    v.setScaleMul(spawning ? spawnPulse(time) : 1);
     v.tick(time);
     // Fall warning: halftone shadow gets denser as the ball drops, pink while the ball is in danger.
     v.updateShadow(this.x, this.bottom, this.inDanger);

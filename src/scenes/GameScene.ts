@@ -15,9 +15,12 @@ import { INK, PAPER, PLAYER_INK } from '../art/palette';
 import { risoText } from '../art/type';
 import { RISO_KEYS, refreshTicketTextures } from '../art/textures';
 import { formatScore } from '../art/ui';
-import { HUD, bestLabel, demoStripVisible, dotX, dotsFilled, formatClock, isComboMilestone, localStampFor, niceDue } from '../art/hud';
+import {
+  FLOOR_SPLAT_Y, HUD, bestLabel, demoStripVisible, dotX, dotsFilled, formatClock, isComboMilestone, localStampFor, niceDue,
+} from '../art/hud';
 import { ComboLabel } from '../art/views/ComboLabel';
 import { PauseMenu } from '../art/views/PauseMenu';
+import { PrintRoller } from '../art/views/PrintRoller';
 
 export interface GameData {
   mode: 'play' | 'attract';
@@ -40,6 +43,7 @@ export class GameScene extends Phaser.Scene {
   private bot: BotInput | null = null;
   private world!: World;
   private juice!: Juice;
+  private roller!: PrintRoller;
   private pauseMenu: PauseMenu | null = null;
 
   private score = 0;
@@ -108,6 +112,7 @@ export class GameScene extends Phaser.Scene {
 
     this.buildHud();
     this.wireEvents();
+    this.roller = new PrintRoller(this);
     if (!this.attract) {
       this.pauseMenu = new PauseMenu(this, {
         onResume: () => this.inputMgr.clearLatched(),
@@ -122,7 +127,10 @@ export class GameScene extends Phaser.Scene {
     leaderboard.best().then((b) => {
       this.best = b;
     });
-    this.events.once('shutdown', () => this.world.destroy());
+    this.events.once('shutdown', () => {
+      this.roller.destroy();
+      this.world.destroy();
+    });
   }
 
   /** Riso HUD in the quiet top band: black Anton score, pink combo stamp, Space Mono clock/best, next-ball dots. */
@@ -201,7 +209,7 @@ export class GameScene extends Phaser.Scene {
     AudioManager.play('gameover');
     // Big pink ink splat on the floor line under the dropped ball + DROPPED stamp. No flash; one tiny
     // camera bump (80 ms, 0.003) lands with the stamp so the slam has weight.
-    this.juice.splat(ball.x, T.floorY - 6, 'pink', 'floor', Infinity);
+    this.juice.splat(ball.x, FLOOR_SPLAT_Y, 'pink', 'floor', Infinity);
     this.juice.banner('DROPPED', { holdMs: Infinity, scale: 2.2 });
     this.cameras.main.shake(80, 0.003);
 
@@ -223,6 +231,7 @@ export class GameScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     this.now = time;
+    this.roller.tick(time);
     this.pauseMenu?.tick(time);
     if (this.pauseMenu?.isOpen) return;
     this.juice.update(time);

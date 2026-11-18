@@ -5,7 +5,7 @@ import {
   CHAR_SHADOW_R, charShadowScale, charShadowStep,
 } from '../src/art/characters';
 import { ARROW_GLYPH_SIZE, ARROW_TEX, arrowExtent, arrowGlyphCenter, arrowTriangle } from '../src/art/arrow';
-import { ballArt, ballLineExtent, ballMisreg, ballSpinTicks, shadowDensity, shadowTexSize } from '../src/art/ball';
+import { ballArt, ballLineExtent, ballMisreg, ballSpinTicks, incomingTexSize, shadowDensity, shadowTexSize } from '../src/art/ball';
 import { SHADOW_STEPS, shadowStep } from '../src/art/shadow';
 import { STAMP_IDS, STAMP_TEXT, formatRank, formatScore } from '../src/art/ui';
 import { SPLAT_SIZE, splatLineExtent, splatMaxExtent, splatShapes } from '../src/art/splat';
@@ -139,6 +139,12 @@ describe('ball art', () => {
         expect(dir[0]).toBeCloseTo(dir[1], 6);
       }
     }
+  });
+  it('incoming spawn halo scales with ball radius and surrounds the ball', () => {
+    for (const r of [20, 44, 70]) {
+      expect(incomingTexSize(r)).toBeGreaterThan(ballArt(r).size);
+    }
+    expect(incomingTexSize(70)).toBeGreaterThan(incomingTexSize(20));
   });
 });
 

@@ -11,12 +11,12 @@ import { RS } from '../config/render';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE } from './palette';
 import { CHAR_SHADOW_R, CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
-import { ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from './ball';
+import { ballArt, drawBallFill, drawBallLine, drawIncomingRing, drawShadow, incomingTexSize, shadowTexSize } from './ball';
 import { drawStage } from './stage';
 import { SHADOW_STEPS } from './shadow';
 import {
   BOARD_CARD, DOT_TEX, LETTER_BOX, PAUSE_CARD, RECEIPT, REPORT_CARD, STAMP_IDS, TICKET,
-  drawBoardReceipt, drawDot, drawLetterBox, drawPauseCard, drawReceipt, drawReportCard, drawStamp, drawTicket, stampSize,
+  drawBoardReceipt, drawDot, drawFaintStamp, drawLetterBox, drawPauseCard, drawReceipt, drawReportCard, drawStamp, drawTicket, stampSize,
   type ReceiptRowData, type StampId,
 } from './ui';
 import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
@@ -35,6 +35,7 @@ export const RISO_KEYS = {
   speedlines: 'riso:speedlines',
   ballFill: (id: PlayerId) => `riso:ball${id}:fill`,
   ballLine: (v: number) => `riso:ball:line:${v}`,
+  incoming: (id: PlayerId) => `riso:incoming${id}`,
   shadow: (n: number) => `riso:shadow:${n}`,
   shadowDanger: (n: number) => `riso:shadowDanger:${n}`,
   /** Character contact shadow (black halftone), same SHADOW_STEPS density steps as the ball's. */
@@ -44,6 +45,7 @@ export const RISO_KEYS = {
   /** Off-screen indicator (points up, pinned to the top edge); display with MULTIPLY. */
   offscreen: (id: PlayerId) => `riso:offscreen${id}`,
   stamp: (id: StampId) => `riso:stamp:${id}`,
+  stampFaint: (id: StampId) => `riso:stampFaint:${id}`,
   splat: (v: number) => `riso:splat:${v}`,
   /** Black keyline matching splat(v) (untinted). Layered on top when splatNeedsKeyline(tint), i.e. yellow. */
   splatLine: (v: number) => `riso:splatLine:${v}`,
@@ -113,6 +115,8 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
   const ball = ballArt(r);
   for (const p of PLAYERS) tex(K.ballFill(p.id), ball.size, ball.size, (c) => drawBallFill(c, p.id, r));
   for (let v = 0; v < BOIL_VARIANTS; v++) tex(K.ballLine(v), ball.size, ball.size, (c) => drawBallLine(c, r, v));
+  const inc = incomingTexSize(r);
+  for (const p of PLAYERS) tex(K.incoming(p.id), inc, inc, (c) => drawIncomingRing(c, p.id, r));
   const sh = shadowTexSize(r);
   for (let n = 0; n < SHADOW_STEPS; n++) {
     tex(K.shadow(n), sh.w, sh.h, (c) => drawShadow(c, r, n, INK.black, INK_ANGLE.black));
@@ -131,6 +135,7 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
   for (const id of STAMP_IDS) {
     const { w, h } = stampSize(measure, id);
     tex(K.stamp(id), w, h, (c) => drawStamp(c, id, w, h));
+    tex(K.stampFaint(id), w, h, (c) => drawFaintStamp(c, id, w, h));
   }
   for (let v = 0; v < BOIL_VARIANTS; v++) {
     tex(K.splat(v), SPLAT_SIZE, SPLAT_SIZE, (c) => drawSplat(c, v));
@@ -168,6 +173,24 @@ export function refreshTicketTextures(scene: Phaser.Scene): void {
   for (const p of PLAYERS) {
     canvasTexture(scene, RISO_KEYS.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
   }
+}
+
+/** Lazily generate the incoming spawn halo for player `id` if not already registered. */
+export function ensureIncomingTexture(scene: Phaser.Scene, id: PlayerId): void {
+  const key = RISO_KEYS.incoming(id);
+  if (scene.textures.exists(key)) return;
+  const r = T.ballRadius;
+  const inc = incomingTexSize(r);
+  canvasTexture(scene, key, inc, inc, (c) => drawIncomingRing(c, id, r));
+}
+
+/** Lazily generate the faint halftone stamp texture for `id` if not already registered. */
+export function ensureFaintStamp(scene: Phaser.Scene, id: StampId): void {
+  const key = RISO_KEYS.stampFaint(id);
+  if (scene.textures.exists(key)) return;
+  const measure = document.createElement('canvas').getContext('2d')!;
+  const { w, h } = stampSize(measure, id);
+  canvasTexture(scene, key, w, h, (c) => drawFaintStamp(c, id, w, h));
 }
 
 /** Render or update the live 5-row Lobby leaderboard receipt texture. */

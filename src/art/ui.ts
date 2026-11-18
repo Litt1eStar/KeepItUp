@@ -72,6 +72,15 @@ export function drawStamp(ctx: Ctx, id: StampId, w: number, h: number): void {
   speckle(ctx, w, h, '#fff', seed + 2, 9);
 }
 
+/** Faint halftone ghost-print stamp in white (opaque dots only, no alpha fade). */
+export function drawFaintStamp(ctx: Ctx, id: StampId, w: number, h: number): void {
+  drawStamp(ctx, id, w, h);
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  fillHalftone(ctx, 0, 0, w, h, '#fff', 0.28, 3.6, INK_ANGLE.pink);
+  ctx.restore();
+}
+
 // ---------------------------------------------------------------- ticket
 
 export const TICKET = { w: 190, h: 116, perfX: 56, notchR: 6 } as const;

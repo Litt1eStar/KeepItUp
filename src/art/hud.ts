@@ -126,10 +126,20 @@ export function popupRise(sinceMs: number): number {
   return i < POPUP_RISE.length ? POPUP_RISE[i] : NaN;
 }
 
-/** Centre banner stamp hold (PLUS_BALL, COMBO); then it disappears in one step. */
+/** Centre banner stamp hold (PLUS_BALL, COMBO); then it disappears in one step (or enters faint ghost print). */
 export const BANNER_MS = 1100;
+/** Faint halftone ghost-print hold after a COMBO milestone banner (~0.83 s). */
+export const BANNER_FAINT_MS = STEP_MS * 10;
+/** y-center of the game-over floor splat so its main blot stays visible on the paper above the floor band. */
+export const FLOOR_SPLAT_Y = T.floorY - 38;
 /** Small stamps near a player (NICE, WRONG, PASS). */
 export const LOCAL_STAMP_MS = STEP_MS * 8;
+
+/** Banner phase `sinceMs` after slamming on screen. */
+export function bannerPhase(sinceMs: number, holdMs: number = BANNER_MS, faintMs = 0): 'solid' | 'faint' | 'done' {
+  if (sinceMs < holdMs) return 'solid';
+  return sinceMs < holdMs + faintMs ? 'faint' : 'done';
+}
 
 /** Attract-mode strip: stepped blink, on 8 idle steps, off 3 (visibility only). */
 export function demoStripVisible(tMs: number): boolean {

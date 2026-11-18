@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  HUD, NICE_EVERY, POPUP_MS, POPUP_RISE, POPUP_STEP_MS, SPLAT_HOLD_STEPS, bestLabel, comboCountLabel, comboMultLabel,
-  demoStripVisible, dotX, dotsFilled, formatClock, hudInQuietBand, isComboMilestone, localStampFor, niceDue, popupRise, readableInk, splatScale, stampMinY,
+  BANNER_FAINT_MS, BANNER_MS, FLOOR_SPLAT_Y, HUD, NICE_EVERY, POPUP_MS, POPUP_RISE, POPUP_STEP_MS, SPLAT_HOLD_STEPS,
+  bannerPhase, bestLabel, comboCountLabel, comboMultLabel, demoStripVisible, dotX, dotsFilled, formatClock,
+  hudInQuietBand, isComboMilestone, localStampFor, niceDue, popupRise, readableInk, splatScale, stampMinY,
 } from '../src/art/hud';
 import { STAMP_H } from '../src/art/ui';
 import { STAGE_QUIET_Y } from '../src/art/stage';
@@ -119,5 +120,16 @@ describe('stepped effect schedules', () => {
     }
     expect(on / N).toBeGreaterThan(0.6);
     expect(on / N).toBeLessThan(0.9);
+  });
+
+  it('bannerPhase steps from solid to faint ghost print to done, and keeps floor splat on paper', () => {
+    expect(bannerPhase(0, BANNER_MS, BANNER_FAINT_MS)).toBe('solid');
+    expect(bannerPhase(BANNER_MS - 1, BANNER_MS, BANNER_FAINT_MS)).toBe('solid');
+    expect(bannerPhase(BANNER_MS, BANNER_MS, BANNER_FAINT_MS)).toBe('faint');
+    expect(bannerPhase(BANNER_MS + BANNER_FAINT_MS - 1, BANNER_MS, BANNER_FAINT_MS)).toBe('faint');
+    expect(bannerPhase(BANNER_MS + BANNER_FAINT_MS, BANNER_MS, BANNER_FAINT_MS)).toBe('done');
+    expect(bannerPhase(BANNER_MS, BANNER_MS, 0)).toBe('done');
+    expect(FLOOR_SPLAT_Y).toBeLessThan(T.floorY - 20);
+    expect(FLOOR_SPLAT_Y).toBeGreaterThan(STAGE_QUIET_Y);
   });
 });

@@ -4,7 +4,7 @@ import { S } from '../config/render';
 import type { PlayerDef } from '../config/players';
 import type { PlayerInput } from '../input/InputManager';
 import { CHAR_R, charShadowScale, charShadowStep } from '../art/characters';
-import { joltOffset, stepSquash } from '../art/motion';
+import { idlePose, joltOffset, stepSquash, type IdlePose } from '../art/motion';
 import { RISO_KEYS } from '../art/textures';
 import { RisoCharacterView, type CharPose } from '../art/views/RisoCharacterView';
 
@@ -40,9 +40,11 @@ export class Player {
   private squash = 0;
   // render cache: only touch Phaser objects when the stepped value changes
   private readonly pose: CharPose = { face: 1, lookX: 0, lookY: 0 };
-  private shownSquash = NaN;
+  private readonly idle: IdlePose = { dy: 0, rot: 0, sx: 1, sy: 1, blink: false };
   private shownDash = false;
-  private shownFace: 1 | -1 = 1;
+  private shownSx = 1;
+  private shownSy = 1;
+  private shownRot = 0;
   private shadowStep = -1;
   private joltAt = -Infinity;
 
@@ -149,16 +151,35 @@ export class Player {
     this.squash = Phaser.Math.Linear(this.squash, 0, Math.min(1, dt * 12));
     const dashing = this.dashing;
     const face = dashing ? this.dashDir : this.facing;
+    const isIdle = this.grounded && this.vx === 0 && !dashing;
+    if (isIdle) {
+      idlePose(this.def.id, tMs, this.idle);
+    } else {
+      this.idle.dy = 0;
+      this.idle.rot = 0;
+      this.idle.sx = 1;
+      this.idle.sy = 1;
+      this.idle.blink = false;
+    }
+
     const c = this.view.container;
-    c.setPosition(this.x, this.y);
+    c.setPosition(this.x, this.y + this.idle.dy);
 
     const sq = stepSquash(this.squash);
-    if (sq !== this.shownSquash || dashing !== this.shownDash || face !== this.shownFace) {
-      this.shownSquash = sq;
+    const sx = dashing ? DASH_STRETCH.sx : (1 + sq) * this.idle.sx;
+    const sy = dashing ? DASH_STRETCH.sy : (1 - sq) * this.idle.sy;
+    const rot = dashing ? face * DASH_LEAN : this.idle.rot;
+    if (sx !== this.shownSx || sy !== this.shownSy) {
+      this.shownSx = sx;
+      this.shownSy = sy;
+      c.setScale(sx, sy);
+    }
+    if (rot !== this.shownRot) {
+      this.shownRot = rot;
+      c.setRotation(rot);
+    }
+    if (dashing !== this.shownDash) {
       this.shownDash = dashing;
-      this.shownFace = face;
-      if (dashing) c.setScale(DASH_STRETCH.sx, DASH_STRETCH.sy).setRotation(face * DASH_LEAN);
-      else c.setScale(1 + sq, 1 - sq).setRotation(0);
       this.view.setSpeedlines(dashing);
     }
 
@@ -172,6 +193,7 @@ export class Player {
       p.lookY = 0;
     }
     p.extraMisreg = joltOffset(tMs - this.joltAt);
+    p.blink = this.idle.blink;
     this.view.pose(p);
     this.view.tick(tMs);
 
