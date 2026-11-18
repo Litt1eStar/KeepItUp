@@ -89,7 +89,18 @@ export class GameOverScene extends Phaser.Scene {
     ensureReportTextures(this);
     this.inputMgr = new InputManager(this);
     this.roller = new PrintRoller(this);
-    this.events.once('shutdown', () => this.roller.destroy());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Escape' || event.key === 'Escape') {
+        event.preventDefault?.();
+        AudioManager.play('select');
+        this.scene.start('Lobby');
+      }
+    };
+    this.input.keyboard?.on('keydown', onKeyDown);
+    this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown', onKeyDown);
+      this.roller.destroy();
+    });
 
     const r = this.result;
     const prevBest = await leaderboard.best();

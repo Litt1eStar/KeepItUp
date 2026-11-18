@@ -16,7 +16,7 @@ export const LOBBY = {
   masthead: { x: 132, issueY: 14, issueSize: 11, headlineY: 32, headlineSize: 24, subY: 64, subSize: 11, ruleY: 90, ruleW: 494 },
   tickets: { x0: 28, y: 112, gap: 14, scale: 1, stampOffsetX: 115, stampOffsetY: 50, stampRot: -0.18, stampScale: 0.72, statusY: 234, padY: 252 },
   receipt: { x: 664, y: 18 },
-  startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'SPACE / START TO PLAY · SOLO IF 1P · F FULLSCREEN' },
+  startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'SPACE / START PLAY · ESC CONTROLS · SOLO OK · F FULLSCREEN' },
 } as const;
 
 /** Left edge of player `id`'s ticket stub on the lobby zine cover. */
@@ -93,12 +93,12 @@ export function slotRotation(i: number): number {
 
 /** Floor-band countdown prompt while entering a team name. */
 export function entryCountdownLabel(secsLeft: number): string {
-  return `AUTO-STAMP IN ${Math.max(0, Math.ceil(secsLeft))}S`;
+  return `AUTO-STAMP IN ${Math.max(0, Math.ceil(secsLeft))}S · ESC = LOBBY`;
 }
 
 /** Floor-band countdown prompt while viewing the high-score receipt. */
 export function boardCountdownLabel(secsLeft: number): string {
-  return `SPACE / START = REMATCH · LOBBY IN ${Math.max(0, Math.ceil(secsLeft))}S`;
+  return `SPACE / START = REMATCH · ESC = LOBBY (${Math.max(0, Math.ceil(secsLeft))}S)`;
 }
 
 // ---------------------------------------------------------------- print roller transition

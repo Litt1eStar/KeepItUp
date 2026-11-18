@@ -22,9 +22,11 @@ const CELL_SY = 0.52;
 
 export interface PauseMenuCallbacks {
   onResume: () => void;
-  onLobby: () => void;
+  onLobby?: () => void;
   onRebind: () => void;
   canPause?: () => boolean;
+  /** Open directly in the Controls key-binding grid (e.g. from the Lobby); ESC/Back closes the overlay. */
+  controlsOnly?: boolean;
 }
 
 interface CtrlCell {
@@ -160,7 +162,7 @@ export class PauseMenu {
     this.mainCursor = 0;
     this.listening = false;
     this.root.setVisible(true);
-    this.setView('main');
+    this.setView(this.callbacks.controlsOnly ? 'controls' : 'main');
     AudioManager.play('select');
   }
 
@@ -418,7 +420,17 @@ export class PauseMenu {
     } else {
       AudioManager.play('select');
       this.hide();
-      this.callbacks.onLobby();
+      this.callbacks.onLobby?.();
+    }
+  }
+
+  private leaveControls(): void {
+    AudioManager.play('select');
+    if (this.callbacks.controlsOnly) {
+      this.hide();
+      this.callbacks.onResume();
+    } else {
+      this.setView('main');
     }
   }
 
@@ -426,8 +438,7 @@ export class PauseMenu {
     const code = event.code;
     if (code === 'Escape' || event.key === 'Escape') {
       event.preventDefault?.();
-      AudioManager.play('select');
-      this.setView('main');
+      this.leaveControls();
       return;
     }
     if (code === 'ArrowUp' || code === 'KeyW') {
@@ -484,8 +495,7 @@ export class PauseMenu {
       this.refreshControlLabels();
       this.refreshControlVisuals();
     } else {
-      AudioManager.play('select');
-      this.setView('main');
+      this.leaveControls();
     }
   }
 }

@@ -15,12 +15,14 @@ import { TICKET, stampTint } from '../art/ui';
 import { demoStripVisible, readableInk } from '../art/hud';
 import { StampSlam } from '../art/views/StampSlam';
 import { PrintRoller } from '../art/views/PrintRoller';
+import { PauseMenu } from '../art/views/PauseMenu';
 import { LOBBY, joinPrompt, padLabel, promptBlinkVisible, ticketX } from '../art/screens';
 import type { Ball } from '../entities/Ball';
 
 const MULTIPLY = Phaser.BlendModes.MULTIPLY;
 
 interface TicketCard {
+  ticket: Phaser.GameObjects.Image;
   slam: StampSlam;
   status: Phaser.GameObjects.Text;
   pad: Phaser.GameObjects.Text;
@@ -37,6 +39,7 @@ export class LobbyScene extends Phaser.Scene {
   private world!: World;
   private juice!: Juice;
   private roller!: PrintRoller;
+  private controlsMenu!: PauseMenu;
   private joined = new Set<PlayerId>();
   private idle = 0;
   private now = 0;
@@ -85,10 +88,25 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     this.roller = new PrintRoller(this);
+    this.controlsMenu = new PauseMenu(this, {
+      controlsOnly: true,
+      onResume: () => this.inputMgr.clearLatched(),
+      onRebind: () => this.onRebindKeys(),
+    });
     this.events.once('shutdown', () => {
       this.roller.destroy();
       this.world.destroy();
     });
+  }
+
+  private onRebindKeys(): void {
+    this.inputMgr.rebind();
+    refreshTicketTextures(this);
+    for (const p of PLAYERS) {
+      const card = this.cards[p.id];
+      card.ticket.setTexture(RISO_KEYS.ticket(p.id));
+      if (!this.joined.has(p.id)) card.status.setText(joinPrompt(p.id, false));
+    }
   }
 
   private buildCoverHeader(): void {
@@ -126,7 +144,7 @@ export class LobbyScene extends Phaser.Scene {
     const tk = LOBBY.tickets;
     for (const p of PLAYERS) {
       const x = ticketX(p.id);
-      this.add.image(x, tk.y, RISO_KEYS.ticket(p.id)).setOrigin(0).setScale(S * tk.scale).setDepth(5);
+      const ticket = this.add.image(x, tk.y, RISO_KEYS.ticket(p.id)).setOrigin(0).setScale(S * tk.scale).setDepth(5);
       const slam = new StampSlam(this, 'JOINED', stampTint(PLAYER_INK[p.id]), tk.stampRot, tk.stampScale);
       slam.image.setPosition(x + tk.stampOffsetX, tk.y + tk.stampOffsetY).setDepth(7).setVisible(false);
 
@@ -144,7 +162,7 @@ export class LobbyScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setBlendMode(MULTIPLY)
         .setDepth(6);
-      this.cards.push({ slam, status, pad, lastPad: initialPad, lastVis: true });
+      this.cards.push({ ticket, slam, status, pad, lastPad: initialPad, lastVis: true });
     }
   }
 
@@ -185,6 +203,11 @@ export class LobbyScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     this.now = time;
     this.roller.tick(time);
+    this.controlsMenu.tick(time);
+    if (this.controlsMenu.isOpen) {
+      this.idle = 0;
+      return;
+    }
     this.juice.update(time);
     this.inputMgr.update();
     const dt = Math.min(delta, 50) / 1000;
