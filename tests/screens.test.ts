@@ -97,8 +97,8 @@ describe('game over report & entry', () => {
     for (let i = 1; i < 8; i++) expect(slotX(i)).toBeGreaterThan(slotX(i - 1));
     for (let i = 0; i < 8; i++) expect(Math.abs(slotRotation(i))).toBeLessThan(0.1);
     expect(entryCountdownLabel(4.2)).toBe('AUTO-STAMP IN 5S · ESC = LOBBY');
-    expect(boardCountdownLabel(0.1)).toBe('SPACE / START = REMATCH · ESC = LOBBY (1S)');
-    expect(LOBBY.startHint.text).toContain('ESC CONTROLS');
+    expect(boardCountdownLabel(0.1)).toBe('SPACE / ENTER / START = LOBBY (1S)');
+    expect(LOBBY.startHint.text).toBe('');
   });
 
   it('keeps report card, entry slots, board receipt and floor hints non-overlapping', () => {

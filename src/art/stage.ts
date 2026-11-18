@@ -298,7 +298,7 @@ function blackInk(c: Ctx): void {
   font(c, 6, MONO_FONT);
   for (let x = 100; x < W; x += 100) if (x < STRIP.x - 10) c.fillText(String(x), x + 2.5, F + 9);
   font(c, 10, MONO_FONT, 700);
-  c.fillText('FLOOR — DO NOT TOUCH', 26, H - 9);
+  c.fillText('Develop by Litt1eStar', 26, H - 9);
   c.restore();
   // test strip contents (black parts): halftone steps + label + keyline
   const sx = STRIP.x + 6, sy = STRIP.y + 5, sw = 14, sh = 14;

@@ -16,7 +16,7 @@ export const LOBBY = {
   masthead: { x: 132, issueY: 14, issueSize: 11, headlineY: 32, headlineSize: 24, subY: 64, subSize: 11, ruleY: 90, ruleW: 494 },
   tickets: { x0: 28, y: 112, gap: 14, scale: 1, stampOffsetX: 115, stampOffsetY: 50, stampRot: -0.18, stampScale: 0.72, swatchY: 245, swatchGap: 29, charY: 263, statusY: 280, padY: 297 },
   receipt: { x: 664, y: 18 },
-  startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'SPACE / START PLAY · ESC CONTROLS · M MUTE · F FULLSCREEN' },
+  startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: '' },
 } as const;
 
 /** Left edge of player `id`'s ticket stub on the lobby zine cover. */
@@ -140,7 +140,7 @@ export function entryCountdownLabel(secsLeft: number): string {
 
 /** Floor-band countdown prompt while viewing the high-score receipt. */
 export function boardCountdownLabel(secsLeft: number): string {
-  return `SPACE / START = REMATCH · ESC = LOBBY (${Math.max(0, Math.ceil(secsLeft))}S)`;
+  return `SPACE / ENTER / START = LOBBY (${Math.max(0, Math.ceil(secsLeft))}S)`;
 }
 
 // ---------------------------------------------------------------- print roller transition
@@ -184,7 +184,7 @@ export const MENU_LAYOUT = {
   arrowX: 62,
   receiptX: 664,
   receiptY: 20,
-  hint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'ENTER / SPACE / START = PLAY · ESC CONTROLS · M MUTE · F FULLSCREEN' },
+  hint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: '' },
 } as const;
 
 export function menuItemY(i: number): number {

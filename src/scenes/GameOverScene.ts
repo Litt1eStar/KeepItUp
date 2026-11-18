@@ -261,9 +261,7 @@ export class GameOverScene extends Phaser.Scene {
       if (this.idle > T.gameOverAutoReturnS) void this.submit();
     } else if (this.state === 'board') {
       this.setCountdownText(boardCountdownLabel(T.gameOverAutoReturnS - this.idle));
-      if (this.inputMgr.startPressed() || this.inputMgr.padConfirmPressed()) {
-        this.roller.exitTo('Game', { mode: 'play', players: this.result.players });
-      } else if (this.inputMgr.padBackPressed() || this.idle > T.gameOverAutoReturnS) {
+      if (this.inputMgr.startPressed() || this.inputMgr.padConfirmPressed() || this.inputMgr.padBackPressed() || this.idle > T.gameOverAutoReturnS) {
         this.roller.exitTo('Lobby');
       }
     }
