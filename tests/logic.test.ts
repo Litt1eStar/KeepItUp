@@ -197,8 +197,15 @@ describe('movement physics', () => {
     const c = { vx: 1100, vy: 0, dashing: true, dashDir: 1 as const, dashTime: 0.1 };
     const d = { vx: -1100, vy: 0, dashing: true, dashDir: -1 as const, dashTime: 0.1 };
     expect(resolvePlayerBump(c, d, 1, TUNING)).toBe(true);
-    expect(c.vx).toBeCloseTo(-TUNING.dashBumpVx * 0.65);
-    expect(d.vx).toBeCloseTo(TUNING.dashBumpVx * 0.65);
+    expect(c.vx).toBeCloseTo(-TUNING.dashBumpVx * TUNING.dashClashMult);
+    expect(d.vx).toBeCloseTo(TUNING.dashBumpVx * TUNING.dashClashMult);
+
+    const p1 = { vx: 0, vy: 0, dashing: false, dashDir: 1 as const, dashTime: 0 };
+    const p2 = { vx: 0, vy: 0, dashing: false, dashDir: -1 as const, dashTime: 0 };
+    expect(resolvePlayerBump(p1, p2, 1, { ...TUNING, playerPushVx: 75 })).toBe(false);
+    expect(p1.vx).toBe(-75);
+    expect(p2.vx).toBe(75);
+    expect(TUNING.dashSpeed).toBeCloseTo(TUNING.dashDistance / TUNING.dashDuration);
   });
 
   it('imparts bounded spin on hit and curves/decays velocity via Magnus force', () => {
@@ -216,13 +223,14 @@ describe('movement physics', () => {
   it('resolveBallCollision separates overlapping balls and exchanges normal velocity', () => {
     const farA = { x: 100, y: 200, vx: 100, vy: 0, r: 44, spin: 0 };
     const farB = { x: 300, y: 200, vx: -100, vy: 0, r: 44, spin: 0 };
-    expect(resolveBallCollision(farA, farB)).toBe(false);
+    expect(resolveBallCollision(farA, farB, TUNING)).toBe(false);
 
     const a = { x: 100, y: 200, vx: 120, vy: 0, r: 44, spin: 0 };
     const b = { x: 170, y: 200, vx: -80, vy: 0, r: 44, spin: 0 };
-    expect(resolveBallCollision(a, b)).toBe(true);
+    expect(resolveBallCollision(a, b, { ...TUNING, ballCollideMinUpVy: 240 })).toBe(true);
     expect(b.x - a.x).toBeGreaterThanOrEqual(88 - 1e-6);
     expect(a.vx).toBeLessThan(0);
     expect(b.vx).toBeGreaterThan(0);
+    expect(b.vy).toBe(-240);
   });
 });

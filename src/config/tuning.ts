@@ -26,6 +26,13 @@ const BALL_RADIUS = urlNumber('ball', 44, 20, 70);
 /** Characters are round: one diameter used for both width and height of the body. */
 const PLAYER_SIZE = 56;
 
+/**
+ * DASH DISTANCE & DURATION: change the defaults here (distance in px, duration in s),
+ * or override per session with `?dash=<40–400>&dashDuration=<0.05–0.5>`.
+ */
+const DASH_DISTANCE = urlNumber('dash', 117, 40, 400);
+const DASH_DURATION = urlNumber('dashDuration', 0.13, 0.05, 0.5);
+
 export const TUNING = {
   // World
   width: 960, // [doc]
@@ -34,11 +41,15 @@ export const TUNING = {
 
   // Ball
   ballRadius: BALL_RADIUS, // was 34 in the doc; bigger = easier to hit
+  ballSpawnFloatTime: 1.2, // s default telegraph float duration for newly spawned balls
+  firstBallFloatTime: 1.0, // s telegraph float duration for the opening ball of a match
+  ballInitialSpin: 1.8, // rad/s initial spin on a spawned ball
   ballGravity: 520, // [doc] px/s²
   bounceNormal: 560, // [doc] px/s upward
   bounceJump: 720, // [doc] px/s upward
   hitVxFactor: 6, // new: vx = (ballX − playerX) × factor
   hitVxMax: 300, // new: clamp for normal hits
+  hitVxTransferClampMult: 1.25, // multiplier on hitVxMax after adding player momentum transfer and drift
   // new: every normal hit drifts the ball toward its next target so a player who doesn't move
   // can't keep a ball bouncing in place forever (and the ball visibly "heads to" whose turn it is)
   hitDriftToTarget: 70,
@@ -46,6 +57,7 @@ export const TUNING = {
   soloDriftMax: 110,
   hitCooldown: 0.15, // new: s, a ball can't be hit twice in a row this fast
   wallBounce: 0.9, // new: horizontal energy kept on wall hit
+  wallSpinRetention: 0.75, // fraction of spin preserved and reversed on wall bounce
 
   // Speed penalty
   speedPenalty: 0.15, // [doc] +× per wrong hit
@@ -73,9 +85,12 @@ export const TUNING = {
   jumpBufferTime: 0.09, // s before landing where a jump press is buffered
 
   // Dash
-  dashSpeed: 900, // [doc] px/s
-  dashDuration: 0.13, // [doc] s
+  dashDistance: DASH_DISTANCE, // px traveled during the active dash (default 117, or ?dash=40–400)
+  dashDuration: DASH_DURATION, // [doc] s (default 0.13, or ?dashDuration=0.05–0.5)
+  dashSpeed: DASH_DISTANCE / DASH_DURATION, // derived px/s so dashDistance controls total reach
   dashCooldown: 0.6, // [doc] s
+  dashExitSpeedMult: 0.35, // fraction of moveSpeed kept at dash end when no direction key is held
+  dashVerticalDamp: 0.5, // upward vy damping factor during the dash air-hang
 
   // Dash-pass (new)
   dashPassVy: 620, // upward launch speed for a dash-pass
@@ -114,6 +129,8 @@ export const TUNING = {
   dashBumpVx: 560, // horizontal launch speed imparted when dashing into a teammate
   dashBumpVy: 240, // upward hop imparted when dashing into a teammate
   dashBumpRecoilVx: 160, // recoil on the dashing player
+  dashClashMult: 0.65, // fraction of dashBumpVx applied when two dashing players collide head-on
+  playerPushVx: 40, // px/s separation nudge when two non-dashing players walk into each other
   bumpDecayDecel: 2600, // px/s² decay when knocked faster than moveSpeed
   stackLaunchVy: 800, // upward launch given to a rider when the base player jumps
 
@@ -124,6 +141,9 @@ export const TUNING = {
   ballSpinMax: 12, // max abs spin (rad/s)
   magnusFactor: 18, // px/s² horizontal curve per rad/s of ball spin
   spinDecay: 0.35, // per-second fractional spin decay in air
+  ballCollideRestitution: 0.95, // bounciness of mid-air ball-to-ball collisions
+  ballCollideSpinImpulse: 3.5, // rad/s spin kick imparted when two balls collide mid-air
+  ballCollideMinUpVy: 180, // minimum upward pop speed in px/s given to the higher ball on collision
 
   // Mid-air poster targets
   targetRadius: 38, // hit radius of the stamped poster target ring
@@ -132,4 +152,10 @@ export const TUNING = {
   targetLifetimeS: 14, // s before an uncollected target expires
   targetBonusPoints: 250, // base points for hitting a BONUS target
   targetCalmPoints: 150, // base points for hitting a SLOW DOWN target
+  targetCalmSpeedThreshold: 1.15, // ball speedMult above which a target spawns as SLOW BALL
+  targetCalmSpeedDelta: 0.25, // speedMult reduction applied to all balls when SLOW BALL is hit
+  targetSpawnMarginX: 180, // px horizontal margin from stage edges for poster target spawns
+  targetSpawnMinY: 165, // top Y limit for poster target spawns
+  targetSpawnMaxY: 305, // bottom Y limit for poster target spawns
+  targetBlinkWarningS: 2.5, // remaining seconds before an uncollected target blinks to warn of expiry
 } as const;

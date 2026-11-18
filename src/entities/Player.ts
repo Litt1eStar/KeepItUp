@@ -120,10 +120,10 @@ export class Player {
     if (this.dashing) {
       this.dashTime -= dt;
       if (this.dashTime <= 0) {
-        this.vx = dir !== 0 ? dir * T.moveSpeed : this.dashDir * T.moveSpeed * 0.35;
+        this.vx = dir !== 0 ? dir * T.moveSpeed : this.dashDir * T.moveSpeed * T.dashExitSpeedMult;
       } else {
-        this.vx = this.dashDir * T.dashSpeed;
-        this.vy = Math.min(this.vy, 0) * 0.5; // brief hang: kill fall, damp rise
+        this.vx = this.dashDir * (T.dashDistance / T.dashDuration);
+        this.vy = Math.min(this.vy, 0) * T.dashVerticalDamp; // brief hang: kill fall, damp rise
       }
     } else {
       if (this.vy < 0) {

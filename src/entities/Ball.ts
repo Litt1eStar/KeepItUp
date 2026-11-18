@@ -14,7 +14,7 @@ export class Ball {
   y: number;
   vx = 0;
   vy = 0;
-  spin = 1.8;
+  spin: number = T.ballInitialSpin;
   speedMult = 1;
   target: PlayerId;
   hitCooldown = 0;
@@ -28,7 +28,7 @@ export class Ball {
   readonly view: RisoBallView;
   private shownInk: PlayerId;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, target: PlayerId, floatTime = 1.2) {
+  constructor(scene: Phaser.Scene, x: number, y: number, target: PlayerId, floatTime: number = T.ballSpawnFloatTime) {
     this.x = x;
     this.y = y;
     this.target = target;
@@ -69,11 +69,11 @@ export class Ball {
     if (this.x - this.r < 0) {
       this.x = this.r;
       this.vx = Math.abs(this.vx) * T.wallBounce;
-      this.spin = -this.spin * 0.75;
+      this.spin = -this.spin * T.wallSpinRetention;
     } else if (this.x + this.r > T.width) {
       this.x = T.width - this.r;
       this.vx = -Math.abs(this.vx) * T.wallBounce;
-      this.spin = -this.spin * 0.75;
+      this.spin = -this.spin * T.wallSpinRetention;
     }
   }
 

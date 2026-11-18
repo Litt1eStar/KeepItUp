@@ -107,7 +107,7 @@ export class GameScene extends Phaser.Scene {
     for (const id of this.data_.players) this.world.addPlayer(id);
     if (this.attract) this.bot = new BotInput(this.world);
 
-    const first = this.world.spawnBall(undefined, 1.0);
+    const first = this.world.spawnBall(undefined, T.firstBallFloatTime);
     const p = this.world.playerById(first.target);
     if (p) first.x = p.x;
 
@@ -186,7 +186,7 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     AudioManager.play('milestone');
     if (e.kind === 'calm') {
-      for (const b of this.world.balls) b.speedMult = Math.max(T.speedMin, b.speedMult - 0.25);
+      for (const b of this.world.balls) b.speedMult = Math.max(T.speedMin, b.speedMult - T.targetCalmSpeedDelta);
       const pts = Math.round(T.targetCalmPoints * comboMultiplier(this.world.combo, T));
       this.score += pts;
       this.juice.splat(e.x, e.y, 'blue', 'jump');

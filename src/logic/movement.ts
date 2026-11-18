@@ -89,7 +89,7 @@ export function resolvePlayerBump(
   a: BumpBody,
   b: BumpBody,
   dirAtoB: 1 | -1,
-  T: { dashBumpVx: number; dashBumpVy: number; dashBumpRecoilVx: number },
+  T: { dashBumpVx: number; dashBumpVy: number; dashBumpRecoilVx: number; dashClashMult?: number; playerPushVx?: number },
 ): boolean {
   if (a.dashing && !b.dashing) {
     b.vx = dirAtoB * T.dashBumpVx;
@@ -106,15 +106,17 @@ export function resolvePlayerBump(
     return true;
   }
   if (a.dashing && b.dashing) {
-    a.vx = -dirAtoB * T.dashBumpVx * 0.65;
-    b.vx = dirAtoB * T.dashBumpVx * 0.65;
+    const clashMult = T.dashClashMult ?? 0.65;
+    a.vx = -dirAtoB * T.dashBumpVx * clashMult;
+    b.vx = dirAtoB * T.dashBumpVx * clashMult;
     a.dashTime = 0;
     b.dashTime = 0;
     return true;
   }
+  const pushVx = T.playerPushVx ?? 40;
   const avg = (a.vx + b.vx) * 0.5;
-  a.vx = avg - dirAtoB * 40;
-  b.vx = avg + dirAtoB * 40;
+  a.vx = avg - dirAtoB * pushVx;
+  b.vx = avg + dirAtoB * pushVx;
   return false;
 }
 
@@ -145,7 +147,11 @@ export function stepBallSpin(
 }
 
 /** Elastic mid-air collision between two balls; returns true when they overlap. */
-export function resolveBallCollision(a: BallBody, b: BallBody): boolean {
+export function resolveBallCollision(
+  a: BallBody,
+  b: BallBody,
+  T: { ballCollideRestitution?: number; ballCollideSpinImpulse?: number; ballCollideMinUpVy?: number } = {},
+): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const dist = Math.hypot(dx, dy);
@@ -162,15 +168,18 @@ export function resolveBallCollision(a: BallBody, b: BallBody): boolean {
 
   const relVn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
   if (relVn < 0) {
-    const impulse = -(1 + 0.95) * relVn * 0.5;
+    const restitution = T.ballCollideRestitution ?? 0.95;
+    const spinImpulse = T.ballCollideSpinImpulse ?? 3.5;
+    const minUpVy = T.ballCollideMinUpVy ?? 180;
+    const impulse = -(1 + restitution) * relVn * 0.5;
     a.vx -= impulse * nx;
     a.vy -= impulse * ny;
     b.vx += impulse * nx;
     b.vy += impulse * ny;
-    a.spin += 3.5;
-    b.spin -= 3.5;
+    a.spin += spinImpulse;
+    b.spin -= spinImpulse;
     const higher = a.y < b.y ? a : b;
-    higher.vy = Math.min(higher.vy, -180);
+    higher.vy = Math.min(higher.vy, -minUpVy);
   }
   return true;
 }

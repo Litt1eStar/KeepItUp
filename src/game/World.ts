@@ -98,7 +98,7 @@ export class World extends Phaser.Events.EventEmitter {
     return p;
   }
 
-  spawnBall(x?: number, floatTime = 1.2): Ball {
+  spawnBall(x?: number, floatTime: number = T.ballSpawnFloatTime): Ball {
     const target = pickSpawnTarget(this.joinedIds, this.balls.map((b) => b.target), this.rng) as PlayerId;
     const bx = x ?? Phaser.Math.Between(140, T.width - 140);
     const ball = new Ball(this.scene, bx, 120, target, floatTime); // below the HUD strip
@@ -259,7 +259,7 @@ export class World extends Phaser.Events.EventEmitter {
       for (let j = i + 1; j < this.balls.length; j++) {
         const b = this.balls[j];
         if (b.floatTime > 0) continue;
-        if (resolveBallCollision(a, b)) {
+        if (resolveBallCollision(a, b, T)) {
           this.emit('ballCollide', {
             x: (a.x + b.x) / 2,
             y: (a.y + b.y) / 2,
@@ -322,7 +322,7 @@ export class World extends Phaser.Events.EventEmitter {
         Phaser.Math.Clamp((ball.x - p.x) * T.hitVxFactor, -T.hitVxMax, T.hitVxMax) +
         p.vx * T.playerVxTransfer +
         this.drift(ball, p, next);
-      ball.vx = Phaser.Math.Clamp(rawVx, -T.hitVxMax * 1.25, T.hitVxMax * 1.25);
+      ball.vx = Phaser.Math.Clamp(rawVx, -T.hitVxMax * T.hitVxTransferClampMult, T.hitVxMax * T.hitVxTransferClampMult);
     }
 
     ball.hitCooldown = T.hitCooldown;
@@ -343,9 +343,9 @@ export class World extends Phaser.Events.EventEmitter {
 
   private spawnTarget(): void {
     ensureTargetTexture(this.scene);
-    const kind: 'bonus' | 'calm' = this.balls.some((b) => b.speedMult > 1.15) ? 'calm' : 'bonus';
-    const x = 180 + Math.floor(this.rng() * (T.width - 360));
-    const y = 165 + Math.floor(this.rng() * 140);
+    const kind: 'bonus' | 'calm' = this.balls.some((b) => b.speedMult > T.targetCalmSpeedThreshold) ? 'calm' : 'bonus';
+    const x = T.targetSpawnMarginX + Math.floor(this.rng() * (T.width - T.targetSpawnMarginX * 2));
+    const y = T.targetSpawnMinY + Math.floor(this.rng() * (T.targetSpawnMaxY - T.targetSpawnMinY));
     const inkHex = kind === 'calm' ? INK_HEX.blue : INK_HEX.pink;
     const inkCss = kind === 'calm' ? INK.blue : INK.pink;
     const ring = this.scene.add.image(0, 0, RISO_KEYS.targetRing).setScale(S).setTint(inkHex).setBlendMode(Phaser.BlendModes.MULTIPLY);
@@ -422,7 +422,7 @@ export class World extends Phaser.Events.EventEmitter {
         t.ring.setRotation(step * 0.08);
       }
       const rem = T.targetLifetimeS - (this.elapsedRulesS - t.bornS);
-      const vis = rem > 2.5 || Math.floor(Math.max(0, time) / STEP_MS) % 2 === 0;
+      const vis = rem > T.targetBlinkWarningS || Math.floor(Math.max(0, time) / STEP_MS) % 2 === 0;
       if (vis !== t.shownVis) {
         t.shownVis = vis;
         t.container.setVisible(vis);
