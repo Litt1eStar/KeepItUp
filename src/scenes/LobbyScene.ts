@@ -271,6 +271,12 @@ export class LobbyScene extends Phaser.Scene {
       const readable = playerReadableCss(p.id);
       const slam = new StampSlam(this, 'JOINED', stampTint(col.baseInk), tk.stampRot, tk.stampScale);
       slam.image.setPosition(x + tk.stampOffsetX, tk.y + tk.stampOffsetY).setDepth(7).setVisible(false);
+      slam.image.setInteractive({ useHandCursor: true });
+      slam.image.on('pointerdown', () => {
+        if (!this.controlsMenu.isOpen && !this.roller.isExiting && this.joined.has(p.id)) {
+          this.unjoin(p.id);
+        }
+      });
 
       const frameCol = col.hex === INK_HEX.yellow ? INK_HEX.black : col.hex;
       const swatchFrame = this.add.rectangle(cx, tk.swatchY, 29, 29).setStrokeStyle(2.5, frameCol).setDepth(5);
@@ -318,7 +324,13 @@ export class LobbyScene extends Phaser.Scene {
         .setFontStyle('bold')
         .setOrigin(0.5, 0)
         .setBlendMode(MULTIPLY)
-        .setDepth(6);
+        .setDepth(6)
+        .setInteractive({ useHandCursor: true });
+      status.on('pointerdown', () => {
+        if (!this.controlsMenu.isOpen && !this.roller.isExiting && this.joined.has(p.id)) {
+          this.unjoin(p.id);
+        }
+      });
       const initialPad = padLabel(p.gamepadIndex, false);
       const pad = this.add
         .text(cx, tk.padY, initialPad, risoText(10, INK.black, 'mono'))
@@ -373,6 +385,19 @@ export class LobbyScene extends Phaser.Scene {
     this.ensurePracticeBall();
   }
 
+  private unjoin(id: PlayerId): void {
+    if (!this.joined.has(id)) return;
+    this.joined.delete(id);
+    this.world.removePlayer(id);
+    AudioManager.play('select');
+    const card = this.cards[id];
+    card.slam.image.setVisible(false);
+    card.charText.setText(charSelectPrompt(id, false));
+    card.status.setText(joinPrompt(id, false)).setVisible(true);
+    card.lastVis = true;
+    for (const p of PLAYERS) this.refreshSwatches(p.id);
+  }
+
   private ensurePracticeBall(): void {
     if (!this.sys.isActive() || this.world.balls.length > 0 || this.world.players.length === 0) return;
     const ball = this.world.spawnBall(undefined, 0.8);
@@ -398,6 +423,8 @@ export class LobbyScene extends Phaser.Scene {
       if (!this.joined.has(p.id)) {
         if (this.inputMgr.playerLeftEdge(p.id)) this.cycleCharacter(p.id, -1);
         else if (this.inputMgr.playerRightEdge(p.id)) this.cycleCharacter(p.id, 1);
+      } else if (this.inputMgr.padBackForPlayer(p.id)) {
+        this.unjoin(p.id);
       }
       if (this.inputMgr.padCharPressed(p.id)) this.cycleCharacter(p.id, 1);
       if (this.inputMgr.get(p.id).jumpPressed) this.join(p.id);

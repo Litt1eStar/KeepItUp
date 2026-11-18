@@ -50,9 +50,11 @@ export class InputManager implements InputSource {
   private prevLeft = [false, false, false];
   private prevRight = [false, false, false];
   private prevPadChar = [false, false, false];
+  private prevPadBackPerPlayer = [false, false, false];
   private leftEdge = [false, false, false];
   private rightEdge = [false, false, false];
   private padCharEdge = [false, false, false];
+  private padBackEdgePerPlayer = [false, false, false];
   private prevStart = false;
   private prevAny = false;
   private prevMenuDir: MenuDirEdges = { left: false, right: false, up: false, down: false };
@@ -175,6 +177,7 @@ export class InputManager implements InputSource {
       const padJump = InputManager.btn(pad, PAD_JUMP);
       const padDash = InputManager.btn(pad, PAD_DASH);
       const padChar = InputManager.btn(pad, PAD_CHAR);
+      const padBack = InputManager.btn(pad, PAD_BACK);
       const jumpPressed = kbJump || (padJump && !this.prevJump[def.id]);
       const dashPressed = kbDash || (padDash && !this.prevDash[def.id]);
       const jumpHeld = k.jump.isDown || padJump || kbJump;
@@ -182,6 +185,7 @@ export class InputManager implements InputSource {
       this.leftEdge[def.id] = left && !this.prevLeft[def.id];
       this.rightEdge[def.id] = right && !this.prevRight[def.id];
       this.padCharEdge[def.id] = padChar && !this.prevPadChar[def.id];
+      this.padBackEdgePerPlayer[def.id] = padBack && !this.prevPadBackPerPlayer[def.id];
 
       this.current[def.id] = { left, right, jumpHeld, jumpPressed, dashPressed };
       this.prevJump[def.id] = padJump;
@@ -189,6 +193,7 @@ export class InputManager implements InputSource {
       this.prevLeft[def.id] = left;
       this.prevRight[def.id] = right;
       this.prevPadChar[def.id] = padChar;
+      this.prevPadBackPerPlayer[def.id] = padBack;
       anyHeld ||= left || right || jumpHeld || k.dash.isDown || padDash || padChar;
       anyEdge ||= jumpPressed || dashPressed || this.padCharEdge[def.id];
     }
@@ -248,6 +253,11 @@ export class InputManager implements InputSource {
   /** Rising edge of Gamepad Y button for player `id`. */
   padCharPressed(id: PlayerId): boolean {
     return this.padCharEdge[id];
+  }
+
+  /** Rising edge of Gamepad B / Back button for player `id`. */
+  padBackForPlayer(id: PlayerId): boolean {
+    return this.padBackEdgePerPlayer[id];
   }
 
   /** Rising edge of D-pad / Left Stick directions across any connected gamepad (for menus). */

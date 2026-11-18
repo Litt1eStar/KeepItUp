@@ -118,6 +118,33 @@ export class World extends Phaser.Events.EventEmitter {
     return p;
   }
 
+  removePlayer(id: PlayerId): void {
+    const removed = this.players.filter((p) => p.id === id);
+    if (removed.length === 0) return;
+    const removedSet = new Set(removed);
+    this.players = this.players.filter((p) => p.id !== id);
+    for (const other of this.players) {
+      if (other.standingOn && removedSet.has(other.standingOn)) {
+        other.standingOn = null;
+      }
+    }
+    for (const p of removed) p.destroy();
+    this.arrows.get(id)?.destroy();
+    this.arrows.delete(id);
+
+    if (this.players.length === 0) {
+      for (const b of [...this.balls]) this.removeBall(b);
+      return;
+    }
+    const nextId = this.joinedIds[0];
+    for (const b of this.balls) {
+      if (b.target === id) {
+        b.setTarget(nextId);
+        this.offscreen.get(b)?.setTexture(RISO_KEYS.offscreen(nextId));
+      }
+    }
+  }
+
   spawnBall(x?: number, floatTime: number = T.ballSpawnFloatTime): Ball {
     const target = pickSpawnTarget(this.joinedIds, this.balls.map((b) => b.target), this.rng) as PlayerId;
     const bx = x ?? Phaser.Math.Between(140, T.width - 140);
