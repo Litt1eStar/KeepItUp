@@ -114,6 +114,41 @@ export function rollerCoverWidth(elapsedMs: number, totalW: number = T.width): n
   return Math.round((totalW * (ROLLER_STEPS - step)) / ROLLER_STEPS);
 }
 
+/** Growing black-ink roller width (px) `elapsedMs` into a scene exit wipe; `totalW` once covered. */
+export function rollerExitWidth(elapsedMs: number, totalW: number = T.width): number {
+  if (elapsedMs < 0) return 0;
+  const step = Math.floor(elapsedMs / ROLLER_STEP_MS) + 1;
+  if (step >= ROLLER_STEPS) return totalW;
+  return Math.round((totalW * step) / ROLLER_STEPS);
+}
+
+// ---------------------------------------------------------------- main menu ("booth cover")
+
+export const MENU_ITEMS = ['PLAY GAME', 'CONTROLS', 'TOP TEAMS'] as const;
+export type MenuItem = (typeof MENU_ITEMS)[number];
+
+export const MENU_LAYOUT = {
+  titleX: 32,
+  issueY: 16,
+  titleY: 32,
+  titleSize: 64,
+  subY: 108,
+  cardX: 32,
+  cardY: 148,
+  itemX: 170,
+  itemY0: 194,
+  itemStep: 48,
+  itemSize: 30,
+  arrowX: 62,
+  receiptX: 664,
+  receiptY: 20,
+  hint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'ENTER / SPACE / START = PLAY · ESC = CONTROLS · F = FULLSCREEN' },
+} as const;
+
+export function menuItemY(i: number): number {
+  return MENU_LAYOUT.itemY0 + i * MENU_LAYOUT.itemStep;
+}
+
 // ---------------------------------------------------------------- pause menu
 
 export const PAUSE_ITEMS = ['RESUME', 'CONTROL', 'BACK TO LOBBY'] as const;

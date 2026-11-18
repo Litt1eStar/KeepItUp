@@ -11,6 +11,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { comboMultiplier, hitPoints, timePoints } from '../logic/Scoring';
 import { leaderboard } from '../services/Leaderboard';
 import type { Ball } from '../entities/Ball';
+import type { Player } from '../entities/Player';
 import { INK, PAPER, PLAYER_INK } from '../art/palette';
 import { risoText } from '../art/type';
 import { RISO_KEYS, refreshTicketTextures } from '../art/textures';
@@ -116,12 +117,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.attract) {
       this.pauseMenu = new PauseMenu(this, {
         onResume: () => this.inputMgr.clearLatched(),
-        onLobby: () => this.scene.start('Lobby'),
+        onLobby: () => this.roller.exitTo('Lobby'),
         onRebind: () => {
           this.inputMgr.rebind();
           refreshTicketTextures(this);
         },
-        canPause: () => !this.over,
+        canPause: () => !this.over && !this.roller.isExiting,
       });
     }
     leaderboard.best().then((b) => {
@@ -159,7 +160,12 @@ export class GameScene extends Phaser.Scene {
 
   private wireEvents(): void {
     this.world.on('hit', (e: HitEvent) => this.onHit(e));
-    this.world.on('dash', () => AudioManager.play('dash'));
+    this.world.on('jump', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
+    this.world.on('land', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
+    this.world.on('dash', (p: Player) => {
+      AudioManager.play('dash');
+      this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
+    });
     this.world.on('comboBreak', (ball: Ball) => {
       AudioManager.play('comboBreak');
       this.juice.popup(ball.x, ball.y - 50, 'COMBO BREAK', 'pink', 20);
@@ -215,7 +221,7 @@ export class GameScene extends Phaser.Scene {
 
     this.time.delayedCall(T.slowMoMs + 400, () => {
       if (this.attract) {
-        this.scene.start('Lobby');
+        this.roller.exitTo('Lobby');
         return;
       }
       const result: GameResult = {
@@ -225,20 +231,21 @@ export class GameScene extends Phaser.Scene {
         correctHits: this.correctHits,
         players: this.data_.players,
       };
-      this.scene.start('GameOver', result);
+      this.roller.exitTo('GameOver', result);
     });
   }
 
   update(time: number, delta: number): void {
     this.now = time;
     this.roller.tick(time);
+    if (this.roller.isExiting) return;
     this.pauseMenu?.tick(time);
     if (this.pauseMenu?.isOpen) return;
     this.juice.update(time);
     this.inputMgr.update();
     if (this.attract) {
       if (this.inputMgr.anyPressed() || this.elapsed > T.attractMaxS) {
-        this.scene.start('Lobby');
+        this.roller.exitTo('Lobby');
         return;
       }
       this.bot!.update();

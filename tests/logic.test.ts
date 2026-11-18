@@ -3,6 +3,7 @@ import { pickNextTarget, pickSpawnTarget, resolveHit, entersDangerZone } from '.
 import { comboMultiplier, hitPoints, timePoints } from '../src/logic/Scoring';
 import { landingX, solveDashPass } from '../src/logic/dashPass';
 import { pickLookTarget } from '../src/logic/lookTarget';
+import { applyJumpCut, effectivePlayerGravity, stepHorizontalVelocity } from '../src/logic/movement';
 import { LocalLeaderboard, type KeyValueStore } from '../src/services/Leaderboard';
 import { TUNING } from '../src/config/tuning';
 
@@ -140,5 +141,44 @@ describe('pickLookTarget', () => {
   it('returns null with no balls, and reuses the out object (no allocation)', () => {
     expect(pickLookTarget(100, 470, 0, [], out)).toBeNull();
     expect(pickLookTarget(0, 0, 0, [{ x: 1, y: 2, target: 0 }], out)).toBe(out);
+  });
+});
+
+describe('movement physics', () => {
+  it('accelerates, turns faster when reversing, and decelerates toward 0', () => {
+    const accel = stepHorizontalVelocity(0, 1, true, 0.05, TUNING);
+    expect(accel).toBeGreaterThan(0);
+    expect(accel).toBeLessThan(TUNING.moveSpeed);
+    const full = stepHorizontalVelocity(0, 1, true, 1, TUNING);
+    expect(full).toBe(TUNING.moveSpeed);
+
+    const forwardStep = Math.abs(stepHorizontalVelocity(0, 1, true, 0.02, TUNING));
+    const turnStep = Math.abs(stepHorizontalVelocity(TUNING.moveSpeed, -1, true, 0.02, TUNING) - TUNING.moveSpeed);
+    expect(turnStep).toBeGreaterThan(forwardStep);
+
+    expect(stepHorizontalVelocity(100, 0, true, 1, TUNING)).toBe(0);
+    expect(stepHorizontalVelocity(100, 0, false, 0.02, TUNING)).toBeGreaterThan(
+      stepHorizontalVelocity(100, 0, true, 0.02, TUNING),
+    );
+  });
+
+  it('shapes gravity with lighter apex hang and heavier falling', () => {
+    expect(effectivePlayerGravity(0, TUNING)).toBeLessThan(TUNING.playerGravity);
+    expect(effectivePlayerGravity(-300, TUNING)).toBe(TUNING.playerGravity);
+    expect(effectivePlayerGravity(300, TUNING)).toBeGreaterThan(TUNING.playerGravity);
+  });
+
+  it('cuts jump upward velocity when released early while holding preserves max jump', () => {
+    expect(applyJumpCut(-TUNING.jumpSpeed, true, false, TUNING)).toEqual({
+      vy: -TUNING.jumpSpeed,
+      cutApplied: false,
+    });
+    const cut = applyJumpCut(-TUNING.jumpSpeed, false, false, TUNING);
+    expect(cut.cutApplied).toBe(true);
+    expect(cut.vy).toBeCloseTo(-TUNING.jumpSpeed * TUNING.jumpCutMultiplier);
+    // Cut only applies once per jump
+    expect(applyJumpCut(cut.vy, false, true, TUNING)).toEqual({ vy: cut.vy, cutApplied: true });
+    // Near peak, no further cut
+    expect(applyJumpCut(-50, false, false, TUNING)).toEqual({ vy: -50, cutApplied: false });
   });
 });

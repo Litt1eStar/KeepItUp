@@ -59,6 +59,8 @@ export class BotInput implements InputSource {
       input.jumpPressed = true;
       input.jumpHeld = true;
     }
+    // Hold jump to reach full height while rising toward an elevated intercept or clearing a teammate.
+    if (!p.grounded && p.vy < 0) input.jumpHeld = true;
     return input;
   }
 

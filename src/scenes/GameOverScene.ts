@@ -90,10 +90,11 @@ export class GameOverScene extends Phaser.Scene {
     this.inputMgr = new InputManager(this);
     this.roller = new PrintRoller(this);
     const onKeyDown = (event: KeyboardEvent) => {
+      if (this.roller.isExiting) return;
       if (event.code === 'Escape' || event.key === 'Escape') {
         event.preventDefault?.();
         AudioManager.play('select');
-        this.scene.start('Lobby');
+        this.roller.exitTo('Lobby');
       }
     };
     this.input.keyboard?.on('keydown', onKeyDown);
@@ -244,6 +245,7 @@ export class GameOverScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     this.now = time;
     this.roller.tick(time);
+    if (this.roller.isExiting) return;
     this.tickReport(time);
     if (!this.inputMgr) return;
     this.inputMgr.update();
@@ -258,9 +260,9 @@ export class GameOverScene extends Phaser.Scene {
     } else if (this.state === 'board') {
       this.setCountdownText(boardCountdownLabel(T.gameOverAutoReturnS - this.idle));
       if (this.inputMgr.startPressed()) {
-        this.scene.start('Game', { mode: 'play', players: this.result.players });
+        this.roller.exitTo('Game', { mode: 'play', players: this.result.players });
       } else if (this.idle > T.gameOverAutoReturnS) {
-        this.scene.start('Lobby');
+        this.roller.exitTo('Lobby');
       }
     }
   }

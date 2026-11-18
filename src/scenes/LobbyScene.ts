@@ -18,6 +18,7 @@ import { PrintRoller } from '../art/views/PrintRoller';
 import { PauseMenu } from '../art/views/PauseMenu';
 import { LOBBY, joinPrompt, padLabel, promptBlinkVisible, ticketX } from '../art/screens';
 import type { Ball } from '../entities/Ball';
+import type { Player } from '../entities/Player';
 
 const MULTIPLY = Phaser.BlendModes.MULTIPLY;
 
@@ -80,7 +81,12 @@ export class LobbyScene extends Phaser.Scene {
       this.juice.splat(e.ball.x, e.ball.bottom, PLAYER_INK[e.player.id], 'small');
       if (e.dashPass && this.joined.size > 1) this.juice.stamp('PASS', e.player.x, e.player.top - 46, PLAYER_INK[e.player.id], 0.8);
     });
-    this.world.on('dash', () => AudioManager.play('dash'));
+    this.world.on('jump', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
+    this.world.on('land', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
+    this.world.on('dash', (p: Player) => {
+      AudioManager.play('dash');
+      this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
+    });
     this.world.on('floor', (ball: Ball) => {
       this.juice.popup(ball.x, T.floorY - 30, 'oops! (practice)', 'black', 16);
       this.world.removeBall(ball);
@@ -204,6 +210,7 @@ export class LobbyScene extends Phaser.Scene {
     this.now = time;
     this.roller.tick(time);
     this.controlsMenu.tick(time);
+    if (this.roller.isExiting) return;
     if (this.controlsMenu.isOpen) {
       this.idle = 0;
       return;
@@ -236,11 +243,11 @@ export class LobbyScene extends Phaser.Scene {
 
     if (this.inputMgr.startPressed()) {
       const players = this.joined.size > 0 ? [...this.joined].sort() : [0 as PlayerId];
-      this.scene.start('Game', { mode: 'play', players });
+      this.roller.exitTo('Game', { mode: 'play', players });
       return;
     }
     if (this.idle > T.lobbyIdleToAttractS) {
-      this.scene.start('Game', { mode: 'attract', players: [0, 1, 2] });
+      this.roller.exitTo('Game', { mode: 'attract', players: [0, 1, 2] });
       return;
     }
 

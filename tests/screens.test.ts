@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  GAME_OVER, LOBBY, PAUSE_ITEMS, PAUSE_LAYOUT, PROMPT_BLINK_ON, PROMPT_BLINK_PERIOD, REPORT_LINE_STEP_MS, ROLLER_STEP_MS, ROLLER_STEPS,
-  boardCountdownLabel, entryCountdownLabel, formatDotRow, joinPrompt, padLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
-  reportLinesVisible, rollerCoverWidth, slotRotation, slotX, teamLabel, ticketX,
+  GAME_OVER, LOBBY, MENU_ITEMS, MENU_LAYOUT, PAUSE_ITEMS, PAUSE_LAYOUT, PROMPT_BLINK_ON, PROMPT_BLINK_PERIOD, REPORT_LINE_STEP_MS, ROLLER_STEP_MS, ROLLER_STEPS,
+  boardCountdownLabel, entryCountdownLabel, formatDotRow, joinPrompt, menuItemY, padLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
+  reportLinesVisible, rollerCoverWidth, rollerExitWidth, slotRotation, slotX, teamLabel, ticketX,
 } from '../src/art/screens';
 import { STEP_MS } from '../src/art/motion';
 import { LETTER_BOX, RECEIPT, TICKET } from '../src/art/ui';
@@ -115,6 +115,36 @@ describe('print-roller transition', () => {
     expect(seen[0]).toBe(T.width);
     expect(seen[ROLLER_STEPS]).toBe(0);
     for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeLessThan(seen[i - 1]);
+  });
+
+  it('steps exit cover width up from 0 to full stage in ROLLER_STEPS ticks', () => {
+    expect(rollerExitWidth(-10)).toBe(0);
+    const seen: number[] = [];
+    for (let s = 0; s < ROLLER_STEPS; s++) {
+      const w = rollerExitWidth(s * ROLLER_STEP_MS + 1);
+      expect(rollerExitWidth(s * ROLLER_STEP_MS + ROLLER_STEP_MS - 1)).toBe(w);
+      seen.push(w);
+    }
+    expect(seen[0]).toBeGreaterThan(0);
+    expect(seen[ROLLER_STEPS - 1]).toBe(T.width);
+    for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThan(seen[i - 1]);
+  });
+});
+
+describe('main menu layout', () => {
+  it('exposes Play, Controls and Top Teams without overlapping the receipt or floor', () => {
+    expect([...MENU_ITEMS]).toEqual(['PLAY GAME', 'CONTROLS', 'TOP TEAMS']);
+    expect(MENU_LAYOUT.titleX + 280).toBeLessThan(MENU_LAYOUT.receiptX);
+    expect(MENU_LAYOUT.receiptX + RECEIPT.w).toBeLessThan(T.width);
+    expect(MENU_LAYOUT.receiptY + RECEIPT.h).toBeLessThan(T.floorY);
+    for (let i = 0; i < MENU_ITEMS.length; i++) {
+      expect(menuItemY(i)).toBeGreaterThan(MENU_LAYOUT.cardY);
+      expect(menuItemY(i)).toBeLessThan(T.floorY);
+      if (i > 0) expect(menuItemY(i)).toBeGreaterThan(menuItemY(i - 1));
+    }
+    expect(MENU_LAYOUT.hint.x).toBeGreaterThan(165);
+    expect(MENU_LAYOUT.hint.x).toBeLessThan(730);
+    expect(MENU_LAYOUT.hint.y).toBeGreaterThan(T.floorY);
   });
 });
 

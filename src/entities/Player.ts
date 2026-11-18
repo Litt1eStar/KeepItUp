@@ -4,9 +4,10 @@ import { S } from '../config/render';
 import type { PlayerDef } from '../config/players';
 import type { PlayerInput } from '../input/InputManager';
 import { CHAR_R, charShadowScale, charShadowStep } from '../art/characters';
-import { idlePose, joltOffset, stepSquash, type IdlePose } from '../art/motion';
+import { airPose, idlePose, joltOffset, runPose, stepSquash, type IdlePose } from '../art/motion';
 import { RISO_KEYS } from '../art/textures';
 import { RisoCharacterView, type CharPose } from '../art/views/RisoCharacterView';
+import { applyJumpCut, effectivePlayerGravity, stepHorizontalVelocity } from '../logic/movement';
 
 /** Where the eyes should look this frame (world coords), or null to look forward. */
 export interface LookTarget {
@@ -34,6 +35,10 @@ export class Player {
   dashCooldown = 0;
   dashDir: 1 | -1 = 1;
   dxThisFrame = 0;
+  landedThisFrame = false;
+  private coyoteTimer = 0;
+  private jumpBufferTimer = 0;
+  private jumpCutApplied = false;
   /** Riso character (fill + boiling line + pupils); container origin = feet. */
   readonly view: RisoCharacterView;
   private readonly shadow: Phaser.GameObjects.Image;
@@ -85,6 +90,9 @@ export class Player {
     const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (dir !== 0) this.facing = dir as 1 | -1;
 
+    this.coyoteTimer = this.grounded ? T.coyoteTime : Math.max(0, this.coyoteTimer - dt);
+    this.jumpBufferTimer = input.jumpPressed ? T.jumpBufferTime : Math.max(0, this.jumpBufferTimer - dt);
+
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     if (input.dashPressed && this.dashCooldown <= 0 && !this.dashing) {
       this.dashTime = T.dashDuration;
@@ -93,12 +101,20 @@ export class Player {
       dashed = true;
     }
 
-    if (input.jumpPressed && this.grounded) {
+    if (this.jumpBufferTimer > 0 && this.coyoteTimer > 0 && !this.dashing) {
       this.vy = -T.jumpSpeed;
       this.grounded = false;
       this.standingOn = null;
+      this.coyoteTimer = 0;
+      this.jumpBufferTimer = 0;
+      this.jumpCutApplied = false;
       jumped = true;
       this.squash = -0.25;
+      if (!input.jumpHeld) {
+        const cut = applyJumpCut(this.vy, false, this.jumpCutApplied, T);
+        this.vy = cut.vy;
+        this.jumpCutApplied = cut.cutApplied;
+      }
     }
 
     if (this.dashing) {
@@ -106,8 +122,13 @@ export class Player {
       this.vx = this.dashDir * T.dashSpeed;
       this.vy = Math.min(this.vy, 0) * 0.5; // brief hang: kill fall, damp rise
     } else {
-      this.vx = dir * T.moveSpeed;
-      this.vy += T.playerGravity * dt;
+      if (this.vy < 0) {
+        const cut = applyJumpCut(this.vy, input.jumpHeld, this.jumpCutApplied, T);
+        this.vy = cut.vy;
+        this.jumpCutApplied = cut.cutApplied;
+      }
+      this.vx = stepHorizontalVelocity(this.vx, dir as -1 | 0 | 1, this.grounded, dt, T);
+      this.vy += effectivePlayerGravity(this.vy, T) * dt;
     }
 
     const before = this.x;
@@ -117,25 +138,29 @@ export class Player {
   }
 
   integrateY(dt: number): void {
+    this.landedThisFrame = false;
     this.prevY = this.y;
     this.y += this.vy * dt;
     this.grounded = false;
     this.standingOn = null;
-    if (this.y >= T.floorY) {
-      if (this.vy > 300) this.squash = 0.2;
-      this.y = T.floorY;
-      this.vy = 0;
-      this.grounded = true;
-    }
+    if (this.y >= T.floorY) this.finishLanding(T.floorY, null);
   }
 
   /** Called by World when this player lands on another player's head. */
   landOn(base: Player): void {
-    if (this.vy > 300) this.squash = 0.2;
-    this.y = base.top;
+    this.finishLanding(base.top, base);
+  }
+
+  private finishLanding(y: number, base: Player | null): void {
+    if (this.vy > 320) {
+      this.squash = 0.22;
+      this.landedThisFrame = true;
+    }
+    this.y = y;
     this.vy = 0;
     this.grounded = true;
     this.standingOn = base;
+    this.jumpCutApplied = false;
   }
 
   /** Wrong hit at scene time tMs: the ink layer jumps out of register for JOLT_MS (see joltOffset). */
@@ -151,15 +176,18 @@ export class Player {
     this.squash = Phaser.Math.Linear(this.squash, 0, Math.min(1, dt * 12));
     const dashing = this.dashing;
     const face = dashing ? this.dashDir : this.facing;
-    const isIdle = this.grounded && this.vx === 0 && !dashing;
-    if (isIdle) {
-      idlePose(this.def.id, tMs, this.idle);
-    } else {
+    if (dashing) {
       this.idle.dy = 0;
       this.idle.rot = 0;
       this.idle.sx = 1;
       this.idle.sy = 1;
       this.idle.blink = false;
+    } else if (!this.grounded) {
+      airPose(this.vx, this.vy, this.idle);
+    } else if (Math.abs(this.vx) > 25) {
+      runPose(tMs, face, this.idle);
+    } else {
+      idlePose(this.def.id, tMs, this.idle);
     }
 
     const c = this.view.container;

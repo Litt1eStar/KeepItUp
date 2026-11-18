@@ -12,6 +12,6 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     generateRisoTextures(this);
-    this.scene.start(new URLSearchParams(location.search).has('styletile') ? 'StyleTile' : 'Lobby');
+    this.scene.start(new URLSearchParams(location.search).has('styletile') ? 'StyleTile' : 'Menu');
   }
 }

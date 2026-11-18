@@ -6,6 +6,7 @@ import { TUNING as T } from './config/tuning';
 import { RS } from './config/render';
 import { PAPER } from './art/palette';
 import { BootScene } from './scenes/BootScene';
+import { MenuScene } from './scenes/MenuScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { GameScene } from './scenes/GameScene';
 import { GameOverScene } from './scenes/GameOverScene';
@@ -36,7 +37,7 @@ async function start(): Promise<void> {
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     input: { gamepad: true },
-    scene: [BootScene, LobbyScene, GameScene, GameOverScene, StyleTileScene],
+    scene: [BootScene, MenuScene, LobbyScene, GameScene, GameOverScene, StyleTileScene],
   });
 
   // Handy for debugging/playtesting from the browser console.

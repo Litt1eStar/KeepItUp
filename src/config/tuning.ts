@@ -57,8 +57,20 @@ export const TUNING = {
   playerWidth: PLAYER_SIZE,
   playerHeight: PLAYER_SIZE,
   moveSpeed: 340, // [doc] px/s
-  jumpSpeed: 640, // [doc] px/s
+  moveAccel: 2800, // px/s² ground acceleration
+  moveDecel: 3200, // px/s² ground deceleration
+  moveTurnAccel: 4800, // px/s² snappy turn-around when reversing direction
+  airAccel: 2200, // px/s² air control acceleration
+  airDecel: 1200, // px/s² air momentum retention
+  jumpSpeed: 640, // [doc] px/s (capped peak when jump is held)
+  jumpCutMultiplier: 0.45, // variable jump: upward vy multiplier when jump is released early
+  jumpCutMinVy: -120, // only cut jump when rising faster than this
   playerGravity: 1500, // [doc] px/s²
+  fallGravityMult: 1.25, // heavier fall for punchy landings
+  apexVyThreshold: 90, // px/s window around jump peak for apex hang
+  apexGravityMult: 0.72, // lighter gravity at jump peak
+  coyoteTime: 0.08, // s after leaving ground where jump still fires
+  jumpBufferTime: 0.09, // s before landing where a jump press is buffered
 
   // Dash
   dashSpeed: 1100, // [doc] px/s

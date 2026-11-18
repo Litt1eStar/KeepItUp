@@ -103,6 +103,45 @@ export function idlePose(id: PlayerId, tMs: number, out: IdlePose = { dy: 0, rot
   return out;
 }
 
+const RUN_DY = [-5, -1, -6, 0] as const;
+
+/** Stepped running stride: lively hop + forward tilt + alternating squash/stretch. */
+export function runPose(
+  tMs: number,
+  face: 1 | -1,
+  out: IdlePose = { dy: 0, rot: 0, sx: 1, sy: 1, blink: false },
+): IdlePose {
+  const step = Math.floor(Math.max(0, tMs) / STEP_MS) % RUN_DY.length;
+  out.dy = RUN_DY[step];
+  out.rot = face * 0.08 + (step % 2 === 0 ? 0.03 : -0.03);
+  out.sx = step % 2 === 0 ? 1.05 : 0.96;
+  out.sy = step % 2 === 0 ? 0.95 : 1.05;
+  out.blink = false;
+  return out;
+}
+
+/** Stepped airborne pose: upward stretch on launch, lean with horizontal momentum, brace on fall. */
+export function airPose(
+  vx: number,
+  vy: number,
+  out: IdlePose = { dy: 0, rot: 0, sx: 1, sy: 1, blink: false },
+): IdlePose {
+  out.dy = 0;
+  out.blink = false;
+  out.rot = Math.round((vx / T.moveSpeed) * 3) * 0.035;
+  if (vy < -150) {
+    out.sx = 0.92;
+    out.sy = 1.1;
+  } else if (vy > 180) {
+    out.sx = 1.06;
+    out.sy = 0.94;
+  } else {
+    out.sx = 1.03;
+    out.sy = 0.97;
+  }
+  return out;
+}
+
 const ARROW_BLINK_STEPS = 6; // one blink cycle = 6 idle steps (~0.5 s)
 const ARROW_BLINK_STEPS_FAST = 4; // several balls on you → faster (~0.33 s)
 

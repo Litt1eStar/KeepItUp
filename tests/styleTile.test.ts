@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BLINK_PERIOD_STEPS, BOIL_MS, JOLT_MS, JOLT_PX, STEP_MS, boilVariant, facingToward, idlePose, inkPunch, joltOffset,
-  quantizeTime, shadowChoice, slamScale, spinAngle, arrowBob, arrowVisible, offscreenScale, spawnPulse, stepSquash,
+  BLINK_PERIOD_STEPS, BOIL_MS, JOLT_MS, JOLT_PX, STEP_MS, airPose, boilVariant, facingToward, idlePose, inkPunch, joltOffset,
+  quantizeTime, runPose, shadowChoice, slamScale, spinAngle, arrowBob, arrowVisible, offscreenScale, spawnPulse, stepSquash,
 } from '../src/art/motion';
 import { INK_CYCLE_MS, ballInkAt, demoBallPos, demoWrongHit, dotsFilledAt, periodIndex } from '../src/art/styleTileMotion';
 import { SHADOW_STEPS } from '../src/art/shadow';
@@ -70,6 +70,18 @@ describe('motion (runtime timing)', () => {
     expect(blinks.filter(Boolean).length).toBe(6);
     expect(blinks.slice(0, 3)).toEqual([true, true, false]);
     expect(idlePose(0, 50).blink).toBe(false);
+  });
+  it('runPose steps through hops and leans in facing direction; airPose stretches on rise', () => {
+    expect(runPose(10, 1)).toEqual(runPose(20, 1));
+    expect(runPose(0, 1).rot).toBeGreaterThan(0);
+    expect(runPose(0, -1).rot).toBeLessThan(0);
+    const rising = airPose(200, -400);
+    const falling = airPose(-200, 400);
+    expect(rising.sy).toBeGreaterThan(1);
+    expect(rising.sx).toBeLessThan(1);
+    expect(rising.rot).toBeGreaterThan(0);
+    expect(falling.sy).toBeLessThan(1);
+    expect(falling.rot).toBeLessThan(0);
   });
 });
 

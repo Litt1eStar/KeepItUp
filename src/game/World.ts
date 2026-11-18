@@ -127,6 +127,7 @@ export class World extends Phaser.Events.EventEmitter {
     // Riders move with whoever they're standing on.
     for (const p of byHeight) {
       if (p.standingOn) p.x = Phaser.Math.Clamp(p.x + p.standingOn.dxThisFrame, p.w / 2, T.width - p.w / 2);
+      if (p.landedThisFrame) this.emit('land', p);
     }
   }
 
