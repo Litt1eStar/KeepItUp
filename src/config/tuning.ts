@@ -21,7 +21,7 @@ const FLOOR_Y = 500;
  * per session with `?ball=<20–70>` in the URL. The art, shadows, hit detection, dash-pass
  * aim and bots all derive from this one value.
  */
-const BALL_RADIUS = urlNumber('ball', 44, 20, 70);
+const BALL_RADIUS = urlNumber('ball', 40, 20, 70);
 
 /** Characters are round: one diameter used for both width and height of the body. */
 const PLAYER_SIZE = 56;
@@ -30,8 +30,8 @@ const PLAYER_SIZE = 56;
  * DASH DISTANCE & DURATION: change the defaults here (distance in px, duration in s),
  * or override per session with `?dash=<40–400>&dashDuration=<0.05–0.5>`.
  */
-const DASH_DISTANCE = urlNumber('dash', 117, 40, 400);
-const DASH_DURATION = urlNumber('dashDuration', 0.13, 0.05, 0.5);
+const DASH_DISTANCE = urlNumber('dash', 150, 40, 400);
+const DASH_DURATION = urlNumber('dashDuration', 0.12, 0.05, 0.5);
 
 export const TUNING = {
   // World
@@ -41,20 +41,20 @@ export const TUNING = {
 
   // Ball
   ballRadius: BALL_RADIUS, // was 34 in the doc; bigger = easier to hit
-  ballSpawnFloatTime: 1.2, // s default telegraph float duration for newly spawned balls
-  firstBallFloatTime: 1.0, // s telegraph float duration for the opening ball of a match
+  ballSpawnFloatTime: 0.9, // s default telegraph float duration for newly spawned balls
+  firstBallFloatTime: 0.7, // s telegraph float duration for the opening ball of a match
   ballInitialSpin: 1.8, // rad/s initial spin on a spawned ball
-  ballGravity: 520, // [doc] px/s²
-  bounceNormal: 560, // [doc] px/s upward
-  bounceJump: 720, // [doc] px/s upward
-  hitVxFactor: 6, // new: vx = (ballX − playerX) × factor
-  hitVxMax: 300, // new: clamp for normal hits
+  ballGravity: 720, // [doc] px/s²
+  bounceNormal: 590, // [doc] px/s upward
+  bounceJump: 770, // [doc] px/s upward
+  hitVxFactor: 7, // new: vx = (ballX − playerX) × factor
+  hitVxMax: 260, // new: clamp for normal hits
   hitVxTransferClampMult: 1.25, // multiplier on hitVxMax after adding player momentum transfer and drift
   // new: every normal hit drifts the ball toward its next target so a player who doesn't move
   // can't keep a ball bouncing in place forever (and the ball visibly "heads to" whose turn it is)
-  hitDriftToTarget: 70,
-  soloDriftMin: 40, // solo: random sideways drift instead
-  soloDriftMax: 110,
+  hitDriftToTarget: 95,
+  soloDriftMin: 65, // solo: random sideways drift instead
+  soloDriftMax: 145,
   hitCooldown: 0.15, // new: s, a ball can't be hit twice in a row this fast
   wallBounce: 0.9, // new: horizontal energy kept on wall hit
   wallSpinRetention: 0.75, // fraction of spin preserved and reversed on wall bounce
@@ -68,34 +68,34 @@ export const TUNING = {
   // Player
   playerWidth: PLAYER_SIZE,
   playerHeight: PLAYER_SIZE,
-  moveSpeed: 340, // [doc] px/s
-  moveAccel: 2800, // px/s² ground acceleration
-  moveDecel: 3200, // px/s² ground deceleration
-  moveTurnAccel: 4800, // px/s² snappy turn-around when reversing direction
-  airAccel: 2200, // px/s² air control acceleration
-  airDecel: 1200, // px/s² air momentum retention
-  jumpSpeed: 640, // [doc] px/s (capped peak when jump is held)
+  moveSpeed: 430, // [doc] px/s
+  moveAccel: 3800, // px/s² ground acceleration
+  moveDecel: 4200, // px/s² ground deceleration
+  moveTurnAccel: 6400, // px/s² snappy turn-around when reversing direction
+  airAccel: 2900, // px/s² air control acceleration
+  airDecel: 1400, // px/s² air momentum retention
+  jumpSpeed: 680, // [doc] px/s (capped peak when jump is held)
   jumpCutMultiplier: 0.45, // variable jump: upward vy multiplier when jump is released early
   jumpCutMinVy: -120, // only cut jump when rising faster than this
-  playerGravity: 1500, // [doc] px/s²
-  fallGravityMult: 1.25, // heavier fall for punchy landings
+  playerGravity: 1750, // [doc] px/s²
+  fallGravityMult: 1.35, // heavier fall for punchy landings
   apexVyThreshold: 90, // px/s window around jump peak for apex hang
   apexGravityMult: 0.72, // lighter gravity at jump peak
   coyoteTime: 0.08, // s after leaving ground where jump still fires
   jumpBufferTime: 0.09, // s before landing where a jump press is buffered
 
   // Dash
-  dashDistance: DASH_DISTANCE, // px traveled during the active dash (default 117, or ?dash=40–400)
-  dashDuration: DASH_DURATION, // [doc] s (default 0.13, or ?dashDuration=0.05–0.5)
+  dashDistance: DASH_DISTANCE, // px traveled during the active dash (default 150, or ?dash=40–400)
+  dashDuration: DASH_DURATION, // [doc] s (default 0.12, or ?dashDuration=0.05–0.5)
   dashSpeed: DASH_DISTANCE / DASH_DURATION, // derived px/s so dashDistance controls total reach
-  dashCooldown: 0.6, // [doc] s
+  dashCooldown: 0.45, // [doc] s
   dashExitSpeedMult: 0.35, // fraction of moveSpeed kept at dash end when no direction key is held
   dashVerticalDamp: 0.5, // upward vy damping factor during the dash air-hang
 
   // Dash-pass (new)
-  dashPassVy: 620, // upward launch speed for a dash-pass
-  dashPassVxMax: 520, // clamp so passes stay readable
-  dashPassSoloVx: 380, // straight sideways speed in solo
+  dashPassVy: 680, // upward launch speed for a dash-pass
+  dashPassVxMax: 560, // clamp so passes stay readable
+  dashPassSoloVx: 440, // straight sideways speed in solo
 
   // Difficulty
   extraBallInterval: 30, // [doc] s
@@ -116,7 +116,7 @@ export const TUNING = {
   shadowMaxHeight: 300,
 
   // Juice (new)
-  hitStopMs: 40,
+  hitStopMs: 25,
   slowMoScale: 0.25,
   slowMoMs: 900,
 
@@ -138,8 +138,8 @@ export const TUNING = {
   playerVxTransfer: 0.32, // fraction of player vx added to ball vx on hit
   hitSpinFactor: 8.5, // rad/s spin from off-center hit position
   moveSpinFactor: 3.5, // rad/s spin from player horizontal movement
-  ballSpinMax: 12, // max abs spin (rad/s)
-  magnusFactor: 18, // px/s² horizontal curve per rad/s of ball spin
+  ballSpinMax: 9.5, // max abs spin (rad/s)
+  magnusFactor: 22, // px/s² horizontal curve per rad/s of ball spin
   spinDecay: 0.35, // per-second fractional spin decay in air
   ballCollideRestitution: 0.95, // bounciness of mid-air ball-to-ball collisions
   ballCollideSpinImpulse: 3.5, // rad/s spin kick imparted when two balls collide mid-air
@@ -147,8 +147,8 @@ export const TUNING = {
 
   // Mid-air poster targets
   targetRadius: 38, // hit radius of the stamped poster target ring
-  targetFirstSpawnS: 5, // s until first poster target appears
-  targetRespawnS: 8, // s after collection before next target prints
+  targetFirstSpawnS: 3.5, // s until first poster target appears
+  targetRespawnS: 6, // s after collection before next target prints
   targetLifetimeS: 14, // s before an uncollected target expires
   targetBonusPoints: 250, // base points for hitting a BONUS target
   targetCalmPoints: 150, // base points for hitting a SLOW DOWN target
