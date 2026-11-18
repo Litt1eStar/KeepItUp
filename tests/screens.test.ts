@@ -9,7 +9,7 @@ import { LETTER_BOX, RECEIPT, TICKET } from '../src/art/ui';
 import { TUNING as T } from '../src/config/tuning';
 import {
   CHAR_STYLE_COUNT, DEFAULT_GAMEPADS, DEFAULT_KEYS, PLAYERS, cyclePlayerCharStyle, cyclePlayerGamepad, eventToKeyName, formatKeyName,
-  formatTicketControls, resetPlayerCharStyles, resetPlayerKeys, setPlayerKey, type PlayerId,
+  formatTicketControls, isCharStyleTaken, resetPlayerCharStyles, resetPlayerKeys, setPlayerCharStyle, setPlayerKey, type PlayerId,
 } from '../src/config/players';
 
 describe('lobby helpers & layout', () => {
@@ -183,9 +183,14 @@ describe('pause menu & key rebinding', () => {
       expect(padSlotLabel(0)).toBe('PAD 1');
       expect(padSlotLabel(1)).toBe('PAD 2');
 
-      expect(cyclePlayerCharStyle(0, 1)).toBe(1);
+      // P2=1 and P3=2 are already taken, so cycling P1 forward skips 1 & 2 and lands on 3
+      expect(cyclePlayerCharStyle(0, 1)).toBe(3);
       expect(cyclePlayerCharStyle(0, -1)).toBe(0);
       expect(cyclePlayerCharStyle(0, -1)).toBe(CHAR_STYLE_COUNT - 1);
+      expect(isCharStyleTaken(1, 0)).toBe(true);
+      expect(isCharStyleTaken(4, 0)).toBe(false);
+      // Direct assignment to a style taken by another player is rejected
+      expect(setPlayerCharStyle(0, 1)).toBe(CHAR_STYLE_COUNT - 1);
       resetPlayerCharStyles();
       expect(PLAYERS[0].charStyle).toBe(0);
       expect(PLAYERS[1].charStyle).toBe(1);

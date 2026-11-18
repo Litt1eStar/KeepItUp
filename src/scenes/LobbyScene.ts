@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
 import {
-  CHAR_STYLE_IDS, PLAYERS, cyclePlayerCharStyle, cyclePlayerGamepad, setPlayerCharStyle, type CharStyleId, type PlayerId,
+  CHAR_STYLE_IDS, PLAYERS, cyclePlayerCharStyle, cyclePlayerGamepad, isCharStyleTaken, setPlayerCharStyle,
+  type CharStyleId, type PlayerId,
 } from '../config/players';
 import { InputManager } from '../input/InputManager';
 import { World, type BumpEvent, type HitEvent } from '../game/World';
@@ -29,6 +30,7 @@ interface CharSwatch {
   style: CharStyleId;
   fill: Phaser.GameObjects.Image;
   line: Phaser.GameObjects.Image;
+  lockMark: Phaser.GameObjects.Graphics;
   sx: number;
 }
 
@@ -167,8 +169,27 @@ export class LobbyScene extends Phaser.Scene {
 
   private selectCharacter(id: PlayerId, style: CharStyleId): void {
     if (PLAYERS[id].charStyle === style) return;
+    if (isCharStyleTaken(style, id)) {
+      AudioManager.play('wrong');
+      return;
+    }
     setPlayerCharStyle(id, style);
     this.applyCharacterStyle(id, style);
+  }
+
+  private refreshSwatches(id: PlayerId): void {
+    const card = this.cards[id];
+    const current = PLAYERS[id].charStyle;
+    const col = styleColor(current);
+    for (const sw of card.swatches) {
+      const active = sw.style === current;
+      const taken = !active && isCharStyleTaken(sw.style, id);
+      const sc = S * (active ? 0.52 : taken ? 0.26 : 0.36);
+      sw.fill.setScale(sc);
+      sw.line.setScale(sc);
+      sw.lockMark.setVisible(taken);
+      if (active) card.swatchFrame.setX(sw.sx).setStrokeStyle(2.5, col.hex === INK_HEX.yellow ? INK_HEX.black : col.hex);
+    }
   }
 
   private applyCharacterStyle(id: PlayerId, style: CharStyleId): void {
@@ -181,13 +202,7 @@ export class LobbyScene extends Phaser.Scene {
     card.charText.setText(charSelectPrompt(id, this.joined.has(id))).setColor(readable);
     card.status.setColor(readable);
     card.slam.image.setTint(stampTint(col.baseInk));
-    for (const sw of card.swatches) {
-      const active = sw.style === style;
-      const sc = S * (active ? 0.52 : 0.36);
-      sw.fill.setScale(sc);
-      sw.line.setScale(sc);
-      if (active) card.swatchFrame.setX(sw.sx).setStrokeStyle(2.5, col.hex === INK_HEX.yellow ? INK_HEX.black : col.hex);
-    }
+    for (const p of PLAYERS) this.refreshSwatches(p.id);
     card.slammedAt = this.now;
     card.lastScale = NaN;
     this.juice.splat(ticketX(id) + 92, LOBBY.tickets.y + 54, col.hex, 'small', 1);
@@ -255,28 +270,29 @@ export class LobbyScene extends Phaser.Scene {
       const swatchFrame = this.add.rectangle(cx, tk.swatchY, 29, 29).setStrokeStyle(2.5, frameCol).setDepth(5);
       const swatches: CharSwatch[] = [];
       for (const style of CHAR_STYLE_IDS) {
-        const active = p.charStyle === style;
         const sx = cx + (style - 2.5) * tk.swatchGap;
-        const sc = S * (active ? 0.52 : 0.36);
-        if (active) swatchFrame.setX(sx);
         const fill = this.add
           .image(sx, tk.swatchY + 11, RISO_KEYS.charStyleFill(style))
           .setOrigin(0.5, 1)
-          .setScale(sc)
           .setBlendMode(MULTIPLY)
           .setDepth(6);
         const line = this.add
           .image(sx, tk.swatchY + 11, RISO_KEYS.charStyleLine(style, 0))
           .setOrigin(0.5, 1)
-          .setScale(sc)
           .setDepth(6);
+        const lockMark = this.add
+          .graphics({ x: sx, y: tk.swatchY })
+          .lineStyle(2, INK_HEX.black)
+          .lineBetween(-7, 7, 7, -7)
+          .setDepth(7)
+          .setVisible(false);
         const hit = this.add.zone(sx, tk.swatchY, 27, 27).setDepth(7).setInteractive({ useHandCursor: true });
         hit.on('pointerdown', () => {
           if (this.controlsMenu.isOpen || this.roller.isExiting) return;
           this.idle = 0;
           this.selectCharacter(p.id, style);
         });
-        swatches.push({ style, fill, line, sx });
+        swatches.push({ style, fill, line, lockMark, sx });
       }
 
       const charText = this.add
@@ -312,6 +328,7 @@ export class LobbyScene extends Phaser.Scene {
         AudioManager.play('join');
       });
       this.cards.push({ ticket, slam, swatchFrame, swatches, charText, status, pad, lastPad: initialPad, lastVis: true, slammedAt: -Infinity, lastScale: 1 });
+      this.refreshSwatches(p.id);
     }
   }
 

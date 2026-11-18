@@ -212,16 +212,29 @@ export function setPlayerKey(id: PlayerId, action: ControlAction, rawKey: string
   if (persist) saveKeys();
 }
 
-/** Assign a player's character style variant (0..5). */
+/** True when `style` is already selected by another player (excluding `excludeId`). */
+export function isCharStyleTaken(style: CharStyleId, excludeId?: PlayerId): boolean {
+  return PLAYERS.some((p) => p.id !== excludeId && p.charStyle === style);
+}
+
+/** Assign a player's character style variant (0..5), rejecting duplicates already used by another player. */
 export function setPlayerCharStyle(id: PlayerId, style: CharStyleId): CharStyleId {
+  if (isCharStyleTaken(style, id)) return PLAYERS[id].charStyle;
   PLAYERS[id].charStyle = style;
   return style;
 }
 
-/** Cycle a player's character style variant forward or backward through all 6 variants. */
+/** Cycle a player's character style variant forward or backward, skipping styles taken by other players. */
 export function cyclePlayerCharStyle(id: PlayerId, delta: 1 | -1 = 1): CharStyleId {
-  const next = ((PLAYERS[id].charStyle + delta + CHAR_STYLE_COUNT) % CHAR_STYLE_COUNT) as CharStyleId;
-  return setPlayerCharStyle(id, next);
+  const cur = PLAYERS[id].charStyle;
+  for (let step = 1; step <= CHAR_STYLE_COUNT; step++) {
+    const next = ((cur + delta * step + CHAR_STYLE_COUNT * 2) % CHAR_STYLE_COUNT) as CharStyleId;
+    if (!isCharStyleTaken(next, id)) {
+      PLAYERS[id].charStyle = next;
+      return next;
+    }
+  }
+  return cur;
 }
 
 /** Restore default character styles (0=PIK, 1=BLOOP, 2=BRICK). */
