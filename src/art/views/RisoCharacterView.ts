@@ -34,6 +34,10 @@ export class RisoCharacterView {
   private speedlines: Phaser.GameObjects.Image | null = null;
   private variant = 0;
   private face: 1 | -1 = 1;
+  private shownFlip = false;
+  private shownBlink = false;
+  private shownMx = NaN;
+  private shownMy = NaN;
 
   /** boilPhaseMs offsets this character's linework boil so several characters don't swap in sync. */
   constructor(
@@ -94,18 +98,36 @@ export class RisoCharacterView {
   pose(p: CharPose): void {
     const extra = p.extraMisreg ?? ZERO;
     const blink = p.blink === true;
+    const flip = p.face < 0;
     if (p.face !== this.face) {
       this.face = p.face;
       this.placeSpeedlines();
     }
-    this.fill.setFlipX(p.face < 0).setPosition(this.misreg.dx + extra.dx, this.misreg.dy + extra.dy);
-    this.line.setFlipX(p.face < 0);
-    const sy = S * (blink ? BLINK_SCALE_Y : 1);
-    this.line.setScale(S, sy);
-    this.fill.setScale(S, sy);
-    for (let i = 0; i < this.pupils.length; i++) {
-      const pos = pupilPosForStyle(this.activeStyle, i, p.lookX, p.lookY, p.face, this.tmp);
-      this.pupils[i].setPosition(pos.x, pos.y).setVisible(!blink);
+    if (flip !== this.shownFlip) {
+      this.shownFlip = flip;
+      this.fill.setFlipX(flip);
+      this.line.setFlipX(flip);
+    }
+    const mx = this.misreg.dx + extra.dx;
+    const my = this.misreg.dy + extra.dy;
+    if (mx !== this.shownMx || my !== this.shownMy) {
+      this.shownMx = mx;
+      this.shownMy = my;
+      this.fill.setPosition(mx, my);
+    }
+    if (blink !== this.shownBlink) {
+      this.shownBlink = blink;
+      const sy = S * (blink ? BLINK_SCALE_Y : 1);
+      this.line.setScale(S, sy);
+      this.fill.setScale(S, sy);
+      for (let i = 0; i < this.pupils.length; i++) this.pupils[i].setVisible(!blink);
+    }
+    if (!blink) {
+      const style = this.activeStyle;
+      for (let i = 0; i < this.pupils.length; i++) {
+        const pos = pupilPosForStyle(style, i, p.lookX, p.lookY, p.face, this.tmp);
+        this.pupils[i].setPosition(pos.x, pos.y);
+      }
     }
   }
 

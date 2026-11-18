@@ -10,6 +10,7 @@ import { CHAR_STYLE_IDS, PLAYERS, type CharStyleId, type PlayerId } from '../con
 import { RS } from '../config/render';
 import { TUNING as T } from '../config/tuning';
 import { INK, INK_ANGLE } from './palette';
+import { releaseInkScratch } from './draw';
 import { CHAR_SHADOW_R, CHAR_TEX, PUPIL_TEX_SIZE, SPEEDLINES_TEX, drawCharacterFill, drawCharacterLine, drawPupil, drawSpeedlines } from './characters';
 import { ballArt, drawBallFill, drawBallLine, drawIncomingRing, drawShadow, incomingTexSize, shadowTexSize } from './ball';
 import { drawStage } from './stage';
@@ -88,11 +89,18 @@ export function allRisoKeys(): string[] {
   ];
 }
 
-/** Create a canvas texture of logical size w×h drawn at RS× resolution (ctx pre-scaled). */
+/** Create (or reuse) a canvas texture of logical size w×h drawn at RS× resolution (ctx pre-scaled). */
 function canvasTexture(scene: Phaser.Scene, key: string, w: number, h: number, draw: (ctx: Ctx) => void): void {
-  if (scene.textures.exists(key)) scene.textures.remove(key);
-  const tex = scene.textures.createCanvas(key, Math.ceil(w * RS), Math.ceil(h * RS))!;
+  const cw = Math.ceil(w * RS);
+  const ch = Math.ceil(h * RS);
+  let tex = scene.textures.exists(key) ? (scene.textures.get(key) as Phaser.Textures.CanvasTexture) : null;
+  if (!tex || tex.width !== cw || tex.height !== ch || typeof tex.getContext !== 'function') {
+    if (tex) scene.textures.remove(key);
+    tex = scene.textures.createCanvas(key, cw, ch)!;
+  }
   const ctx = tex.getContext();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
   ctx.save();
   ctx.scale(RS, RS);
   draw(ctx);
@@ -176,8 +184,16 @@ function risoTextureStages(scene: Phaser.Scene): TextureStage[] {
   ];
 }
 
+function nextPaintFrame(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+    else setTimeout(resolve, 0);
+  });
+}
+
 export function generateRisoTextures(scene: Phaser.Scene): void {
   for (const stage of risoTextureStages(scene)) stage.run();
+  releaseInkScratch();
 }
 
 /** Generate riso textures across yielded frames so the loading screen can render progress. */
@@ -188,10 +204,14 @@ export async function generateRisoTexturesAsync(
   const stages = risoTextureStages(scene);
   for (let i = 0; i < stages.length; i++) {
     onProgress(i / stages.length, stages[i].label);
-    await new Promise<void>((resolve) => setTimeout(resolve, 16));
-    if (!scene.sys.isActive()) return;
+    await nextPaintFrame();
+    if (!scene.sys.isActive()) {
+      releaseInkScratch();
+      return;
+    }
     stages[i].run();
   }
+  releaseInkScratch();
   onProgress(1, 'READY!');
 }
 

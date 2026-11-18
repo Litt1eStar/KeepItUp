@@ -170,17 +170,24 @@ export function fillHalftone(
 ): void {
   const raw = halftoneDots(w, h, density, cell, angleDeg, { bleed: true, ...opts });
   if (raw.length === 0) return;
-  const dots = opts.jitter === false ? raw : jitterDots(raw, opts.jitterSeed ?? 1);
+  const doJitter = opts.jitter !== false;
+  const rnd = doJitter ? seeded((opts.jitterSeed ?? 1) * 4099 + 7) : null;
   ctx.save();
   ctx.fillStyle = color;
   ctx.beginPath();
-  for (const p of dots) {
-    ctx.moveTo(x + p.x + p.r, y + p.y);
-    ctx.arc(x + p.x, y + p.y, p.r, 0, Math.PI * 2);
+  for (let i = 0; i < raw.length; i++) {
+    const p = raw[i];
+    const px = x + (rnd ? p.x + (rnd() * 2 - 1) * 0.2 : p.x);
+    const py = y + (rnd ? p.y + (rnd() * 2 - 1) * 0.2 : p.y);
+    const pr = rnd ? p.r * (1 + (rnd() * 2 - 1) * 0.1) : p.r;
+    ctx.moveTo(px + pr, py);
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
   }
   ctx.fill();
   ctx.restore();
 }
+
+const GRAIN_ALPHA_LEVELS = [0.5, 0.7, 0.9] as const;
 
 /** Fill w x h with PAPER (forces source-over, ignoring caller's composite op) and speckle it with faint dark/light fibers. Deterministic by seed. */
 export function paperGrain(ctx: CanvasRenderingContext2D, w: number, h: number, seed: number, amount = 0.06): void {
@@ -190,16 +197,30 @@ export function paperGrain(ctx: CanvasRenderingContext2D, w: number, h: number, 
   ctx.fillRect(0, 0, w, h);
   const rnd = seeded(seed);
   const n = Math.floor(w * h * 0.02);
+  // Batch fibers into 6 paths (dark/light × 3 alpha levels) to avoid thousands of fillRect state changes.
+  const buckets: number[][] = [[], [], [], [], [], []];
   for (let i = 0; i < n; i++) {
     const x = rnd() * w, y = rnd() * h;
     const dark = rnd() < 0.55;
-    ctx.fillStyle = dark ? '#6b5a44' : '#ffffff';
-    ctx.globalAlpha = amount * (0.4 + rnd() * 0.6);
+    const lvl = Math.min(2, Math.floor(rnd() * 3));
     const s = rnd() < 0.85 ? 1 : 2;
-    ctx.fillRect(x, y, s, s);
+    buckets[(dark ? 0 : 3) + lvl].push(x, y, s);
+  }
+  for (let b = 0; b < 6; b++) {
+    const arr = buckets[b];
+    if (arr.length === 0) continue;
+    ctx.fillStyle = b < 3 ? '#6b5a44' : '#ffffff';
+    ctx.globalAlpha = amount * GRAIN_ALPHA_LEVELS[b % 3];
+    ctx.beginPath();
+    for (let j = 0; j < arr.length; j += 3) {
+      ctx.rect(arr[j], arr[j + 1], arr[j + 2], arr[j + 2]);
+    }
+    ctx.fill();
   }
   ctx.restore();
 }
+
+const MOTTLE_ALPHA_LEVELS = [0.45, 0.68, 0.9] as const;
 
 /**
  * Knock small low-alpha irregular blotches out of what is already drawn
@@ -212,26 +233,52 @@ export function mottle(ctx: CanvasRenderingContext2D, w: number, h: number, seed
   ctx.fillStyle = '#000';
   const rnd = seeded(seed);
   const n = Math.floor((w * h) / 90);
+  const buckets: number[][] = [[], [], []];
   for (let i = 0; i < n; i++) {
     const x = rnd() * w, y = rnd() * h;
     const rx = 0.6 + rnd() * 2.4, ry = 0.6 + rnd() * 2.4;
-    ctx.globalAlpha = strength * (0.3 + rnd() * 0.7);
+    const lvl = Math.min(2, Math.floor(rnd() * 3));
+    const rot = rnd() * Math.PI;
+    buckets[lvl].push(x, y, rx, ry, rot);
+  }
+  for (let lvl = 0; lvl < 3; lvl++) {
+    const arr = buckets[lvl];
+    if (arr.length === 0) continue;
+    ctx.globalAlpha = strength * MOTTLE_ALPHA_LEVELS[lvl];
     ctx.beginPath();
-    ctx.ellipse(x, y, rx, ry, rnd() * Math.PI, 0, Math.PI * 2);
+    for (let j = 0; j < arr.length; j += 5) {
+      const x = arr[j], y = arr[j + 1], rx = arr[j + 2], ry = arr[j + 3], rot = arr[j + 4];
+      ctx.moveTo(x + rx * Math.cos(rot), y + rx * Math.sin(rot));
+      ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+    }
     ctx.fill();
   }
   ctx.restore();
 }
+
+const SPECKLE_ALPHA_LEVELS = [0.65, 0.9] as const;
 
 /** Scatter `count` tiny ink dots over the w x h area. Deterministic by seed. Inherits caller's composite op. */
 export function speckle(ctx: CanvasRenderingContext2D, w: number, h: number, color: string, seed: number, count: number): void {
   ctx.save();
   ctx.fillStyle = color;
   const rnd = seeded(seed);
+  const buckets: number[][] = [[], []];
   for (let i = 0; i < count; i++) {
-    ctx.globalAlpha = 0.5 + rnd() * 0.5;
+    const lvl = rnd() < 0.5 ? 0 : 1;
+    const x = rnd() * w, y = rnd() * h, r = 0.4 + rnd() * 0.9;
+    buckets[lvl].push(x, y, r);
+  }
+  for (let lvl = 0; lvl < 2; lvl++) {
+    const arr = buckets[lvl];
+    if (arr.length === 0) continue;
+    ctx.globalAlpha = SPECKLE_ALPHA_LEVELS[lvl];
     ctx.beginPath();
-    ctx.arc(rnd() * w, rnd() * h, 0.4 + rnd() * 0.9, 0, Math.PI * 2);
+    for (let j = 0; j < arr.length; j += 3) {
+      const x = arr[j], y = arr[j + 1], r = arr[j + 2];
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
     ctx.fill();
   }
   ctx.restore();

@@ -427,10 +427,16 @@ export class World extends Phaser.Events.EventEmitter {
     this.nextTargetAtS = this.elapsedRulesS + delayS;
   }
 
+  private readonly targetCounts = [0, 0, 0];
+
   render(dt: number, time: number): void {
     this.lastRenderTime = time;
     for (const p of this.players) p.render(dt, time, pickLookTarget(p.x, p.y - p.h / 2, p.id, this.balls, this.look));
+    this.targetCounts[0] = 0;
+    this.targetCounts[1] = 0;
+    this.targetCounts[2] = 0;
     for (const b of this.balls) {
+      this.targetCounts[b.target]++;
       b.render(dt, time);
       // Off-screen indicator pinned to the top edge when a ball flies above the screen.
       const ind = this.offscreen.get(b);
@@ -451,8 +457,7 @@ export class World extends Phaser.Events.EventEmitter {
     const bob = arrowBob(time);
     for (const p of this.players) {
       const arrow = this.arrows.get(p.id)!;
-      let count = 0;
-      for (const b of this.balls) if (b.target === p.id) count++;
+      const count = this.targetCounts[p.id];
       const on = count > 0 && arrowVisible(time, count > 1);
       arrow.setVisible(on);
       if (on) arrow.setPosition(p.x, p.top - 22 + bob);

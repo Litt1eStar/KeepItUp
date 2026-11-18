@@ -72,6 +72,17 @@ export function roundRectPath(ctx: Ctx, x: number, y: number, w: number, h: numb
   ctx.closePath();
 }
 
+const scratchPool: HTMLCanvasElement[] = [];
+
+/** Free any pooled offscreen ink-layer canvases after batch texture generation. */
+export function releaseInkScratch(): void {
+  for (const c of scratchPool) {
+    c.width = 0;
+    c.height = 0;
+  }
+  scratchPool.length = 0;
+}
+
 /**
  * Draw one ink pass on its own offscreen canvas (covering logical rect x,y,w,h), then composite it
  * onto ctx with `op` (multiply by default = overprint) shifted by `offset` (misregistration).
@@ -89,10 +100,16 @@ export function inkLayer(
   op: GlobalCompositeOperation = 'multiply',
 ): void {
   const sc = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.ceil(w * sc));
-  canvas.height = Math.max(1, Math.ceil(h * sc));
+  const cw = Math.max(1, Math.ceil(w * sc));
+  const ch = Math.max(1, Math.ceil(h * sc));
+  const canvas = scratchPool.pop() ?? document.createElement('canvas');
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw;
+    canvas.height = ch;
+  }
   const lc = canvas.getContext('2d')!;
+  lc.setTransform(1, 0, 0, 1, 0, 0);
+  lc.clearRect(0, 0, cw, ch);
   lc.scale(sc, sc);
   lc.translate(-x, -y);
   draw(lc);
@@ -100,9 +117,7 @@ export function inkLayer(
   ctx.globalCompositeOperation = op;
   ctx.drawImage(canvas, x + offset.dx, y + offset.dy, w, h);
   ctx.restore();
-  // release the backing store now (full-stage layers are ~20 MB each at RS=3)
-  canvas.width = 0;
-  canvas.height = 0;
+  scratchPool.push(canvas);
 }
 
 /**
