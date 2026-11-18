@@ -4,7 +4,7 @@ import { S } from '../config/render';
 import type { PlayerId } from '../config/players';
 import { InputManager, type InputSource } from '../input/InputManager';
 import { BotInput } from '../input/BotInput';
-import { World, type HitEvent } from '../game/World';
+import { World, type BumpEvent, type HitEvent, type TargetHitEvent } from '../game/World';
 import { drawStage } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
@@ -166,11 +166,39 @@ export class GameScene extends Phaser.Scene {
       AudioManager.play('dash');
       this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
     });
+    this.world.on('bump', (e: BumpEvent) => {
+      AudioManager.play('hit');
+      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'hit', 2);
+    });
+    this.world.on('ballCollide', (e: BumpEvent) => {
+      AudioManager.play('hit');
+      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'small', 2);
+    });
+    this.world.on('targetHit', (e: TargetHitEvent) => this.onTargetHit(e));
     this.world.on('comboBreak', (ball: Ball) => {
       AudioManager.play('comboBreak');
       this.juice.popup(ball.x, ball.y - 50, 'COMBO BREAK', 'pink', 20);
     });
     this.world.on('floor', (ball: Ball) => this.onDrop(ball));
+  }
+
+  private onTargetHit(e: TargetHitEvent): void {
+    if (this.over) return;
+    AudioManager.play('milestone');
+    if (e.kind === 'calm') {
+      for (const b of this.world.balls) b.speedMult = Math.max(T.speedMin, b.speedMult - 0.25);
+      const pts = Math.round(T.targetCalmPoints * comboMultiplier(this.world.combo, T));
+      this.score += pts;
+      this.juice.splat(e.x, e.y, 'blue', 'jump');
+      this.juice.popup(e.x, e.y, `SLOW +${pts}`, 'blue', 20);
+    } else {
+      this.world.combo++;
+      this.world.bestCombo = Math.max(this.world.bestCombo, this.world.combo);
+      const pts = Math.round(T.targetBonusPoints * comboMultiplier(this.world.combo, T));
+      this.score += pts;
+      this.juice.splat(e.x, e.y, 'pink', 'jump');
+      this.juice.popup(e.x, e.y, `★ +${pts}`, 'pink', 22);
+    }
   }
 
   private onHit(e: HitEvent): void {

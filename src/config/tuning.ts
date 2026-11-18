@@ -109,4 +109,27 @@ export const TUNING = {
   lobbyIdleToAttractS: 30,
   gameOverAutoReturnS: 15,
   attractMaxS: 45, // attract demo restarts/returns after this long
+
+  // Player bump & trampoline physics
+  dashBumpVx: 720, // horizontal launch speed imparted when dashing into a teammate
+  dashBumpVy: 240, // upward hop imparted when dashing into a teammate
+  dashBumpRecoilVx: 160, // recoil on the dashing player
+  bumpDecayDecel: 1800, // px/s² decay when knocked faster than moveSpeed
+  stackLaunchVy: 800, // upward launch given to a rider when the base player jumps
+
+  // Ball spin & momentum transfer
+  playerVxTransfer: 0.32, // fraction of player vx added to ball vx on hit
+  hitSpinFactor: 8.5, // rad/s spin from off-center hit position
+  moveSpinFactor: 3.5, // rad/s spin from player horizontal movement
+  ballSpinMax: 12, // max abs spin (rad/s)
+  magnusFactor: 18, // px/s² horizontal curve per rad/s of ball spin
+  spinDecay: 0.35, // per-second fractional spin decay in air
+
+  // Mid-air poster targets
+  targetRadius: 38, // hit radius of the stamped poster target ring
+  targetFirstSpawnS: 5, // s until first poster target appears
+  targetRespawnS: 8, // s after collection before next target prints
+  targetLifetimeS: 14, // s before an uncollected target expires
+  targetBonusPoints: 250, // base points for hitting a BONUS target
+  targetCalmPoints: 150, // base points for hitting a SLOW DOWN target
 } as const;

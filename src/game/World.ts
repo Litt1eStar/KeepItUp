@@ -3,13 +3,16 @@ import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
 import { PLAYERS, type PlayerId } from '../config/players';
 import { Player, type LookTarget } from '../entities/Player';
-import { RISO_KEYS } from '../art/textures';
-import { arrowBob, arrowVisible, offscreenScale } from '../art/motion';
+import { RISO_KEYS, ensureTargetTexture } from '../art/textures';
+import { INK, INK_HEX } from '../art/palette';
+import { risoText } from '../art/type';
+import { STEP_MS, arrowBob, arrowVisible, offscreenScale, slamScale } from '../art/motion';
 import { Ball } from '../entities/Ball';
 import type { InputSource } from '../input/InputManager';
 import { entersDangerZone, pickNextTarget, pickSpawnTarget, resolveHit } from '../logic/TurnSystem';
 import { solveDashPass } from '../logic/dashPass';
 import { pickLookTarget } from '../logic/lookTarget';
+import { computeHitSpin, resolveBallCollision, resolvePlayerBump } from '../logic/movement';
 
 export interface HitEvent {
   ball: Ball;
@@ -20,11 +23,39 @@ export interface HitEvent {
   dashPass: boolean;
 }
 
+export interface BumpEvent {
+  x: number;
+  y: number;
+  ink: PlayerId;
+}
+
+export interface TargetHitEvent {
+  x: number;
+  y: number;
+  kind: 'bonus' | 'calm';
+  ball: Ball;
+}
+
+interface PosterTarget {
+  x: number;
+  y: number;
+  kind: 'bonus' | 'calm';
+  bornS: number;
+  spawnedAtMs: number;
+  container: Phaser.GameObjects.Container;
+  ring: Phaser.GameObjects.Image;
+  label: Phaser.GameObjects.Text;
+  shownScale: number;
+  shownStep: number;
+  shownVis: boolean;
+}
+
 /**
- * Shared simulation: players, balls, collisions and the turn rules.
- * Used by the game (rules on) and by the lobby practice area (rules off, ball can't fail).
+ * Shared simulation: players, balls, collisions, bumps, poster targets and turn rules.
+ * Used by the game (rules on) and by the menu/lobby practice areas (rules off, balls can't fail).
  *
- * Events: 'hit' (HitEvent), 'comboBreak' (ball), 'floor' (ball), 'jump' (player), 'dash' (player)
+ * Events: 'hit' (HitEvent), 'comboBreak' (ball), 'floor' (ball), 'jump' (player),
+ * 'dash' (player), 'land' (player), 'bump' (BumpEvent), 'ballCollide' (BumpEvent), 'targetHit' (TargetHitEvent)
  */
 export class World extends Phaser.Events.EventEmitter {
   players: Player[] = [];
@@ -36,10 +67,14 @@ export class World extends Phaser.Events.EventEmitter {
   /** Last scale step shown per off-screen indicator (avoid re-setting every frame). */
   private offscreenShownScale = new Map<Ball, number>();
   private readonly look: LookTarget = { x: 0, y: 0 };
+  private lastRenderTime = 0;
+  private elapsedRulesS = 0;
+  private nextTargetAtS: number = T.targetFirstSpawnS;
+  private target: PosterTarget | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    /** When false (lobby practice), hits don't affect combo or speed. */
+    /** When false (menu/lobby practice), hits don't affect combo or speed and targets stay off. */
     readonly rules: boolean,
     private readonly rng: () => number = Math.random,
   ) {
@@ -83,18 +118,43 @@ export class World extends Phaser.Events.EventEmitter {
   }
 
   step(dt: number, input: InputSource): void {
+    if (this.rules) {
+      this.elapsedRulesS += dt;
+      if (!this.target && this.elapsedRulesS >= this.nextTargetAtS) {
+        this.spawnTarget();
+      } else if (this.target && this.elapsedRulesS - this.target.bornS >= T.targetLifetimeS) {
+        this.clearTarget(T.targetRespawnS);
+      }
+    }
     this.stepPlayers(dt, input);
     this.stepBalls(dt);
   }
 
   private stepPlayers(dt: number, input: InputSource): void {
+    const ridersByBase = new Map<Player, Player[]>();
+    for (const p of this.players) {
+      if (p.standingOn) {
+        const list = ridersByBase.get(p.standingOn) ?? [];
+        list.push(p);
+        ridersByBase.set(p.standingOn, list);
+      }
+    }
+
     for (const p of this.players) {
       const { jumped, dashed } = p.applyInput(input.get(p.id), dt);
-      if (jumped) this.emit('jump', p);
+      if (jumped) {
+        this.emit('jump', p);
+        for (const rider of ridersByBase.get(p) ?? []) {
+          rider.vy = -T.stackLaunchVy;
+          rider.grounded = false;
+          rider.standingOn = null;
+          this.emit('bump', { x: rider.x, y: p.top, ink: p.id } satisfies BumpEvent);
+        }
+      }
       if (dashed) this.emit('dash', p);
     }
 
-    // Side pushing: players can't overlap, so the team has to split up zones.
+    // Side pushing + dash-bump launch: players collide physically instead of phasing.
     for (let i = 0; i < this.players.length; i++) {
       for (let j = i + 1; j < this.players.length; j++) {
         const a = this.players[i];
@@ -103,10 +163,20 @@ export class World extends Phaser.Events.EventEmitter {
         const overlapY = Math.min(a.y, b.y) - Math.max(a.top, b.top);
         if (overlapX <= 0 || overlapY <= 12) continue; // 12px slack so stacking isn't treated as a shove
         const dir = a.x < b.x || (a.x === b.x && i < j) ? -1 : 1;
+        const dirAtoB = (-dir) as 1 | -1;
         const half = overlapX / 2;
         a.x += dir * half;
         b.x -= dir * half;
         this.clampToWalls(a, b);
+        if (resolvePlayerBump(a, b, dirAtoB, T)) {
+          a.jolt(this.lastRenderTime);
+          b.jolt(this.lastRenderTime);
+          this.emit('bump', {
+            x: (a.x + b.x) / 2,
+            y: Math.min(a.y, b.y) - 28,
+            ink: a.dashing ? a.id : b.id,
+          } satisfies BumpEvent);
+        }
       }
     }
 
@@ -160,6 +230,12 @@ export class World extends Phaser.Events.EventEmitter {
         }
       }
 
+      if (this.target && Math.hypot(ball.x - this.target.x, ball.y - this.target.y) <= ball.r + T.targetRadius) {
+        const hit: TargetHitEvent = { x: this.target.x, y: this.target.y, kind: this.target.kind, ball };
+        this.clearTarget(T.targetRespawnS);
+        this.emit('targetHit', hit);
+      }
+
       if (entersDangerZone(ball.prevBottom, ball.bottom, T.dangerLineY)) {
         ball.inDanger = true;
         if (this.rules && this.combo > 0) {
@@ -173,6 +249,23 @@ export class World extends Phaser.Events.EventEmitter {
       if (ball.bottom >= T.floorY) {
         ball.y = T.floorY - ball.r;
         this.emit('floor', ball);
+      }
+    }
+
+    // Mid-air ball-to-ball clacks
+    for (let i = 0; i < this.balls.length; i++) {
+      const a = this.balls[i];
+      if (a.floatTime > 0) continue;
+      for (let j = i + 1; j < this.balls.length; j++) {
+        const b = this.balls[j];
+        if (b.floatTime > 0) continue;
+        if (resolveBallCollision(a, b)) {
+          this.emit('ballCollide', {
+            x: (a.x + b.x) / 2,
+            y: (a.y + b.y) / 2,
+            ink: a.target,
+          } satisfies BumpEvent);
+        }
       }
     }
   }
@@ -203,6 +296,7 @@ export class World extends Phaser.Events.EventEmitter {
     const jumpHit = !p.grounded && p.vy < 0;
     const dashPass = p.dashing;
     ball.y = Math.min(ball.y, p.top - ball.r);
+    ball.spin = computeHitSpin(ball.x, p.x, ball.r + p.w / 2, p.vx, T);
 
     if (dashPass) {
       const mate = this.playerById(next);
@@ -224,7 +318,11 @@ export class World extends Phaser.Events.EventEmitter {
       }
     } else {
       ball.vy = -(jumpHit ? T.bounceJump : T.bounceNormal);
-      ball.vx = Phaser.Math.Clamp((ball.x - p.x) * T.hitVxFactor, -T.hitVxMax, T.hitVxMax) + this.drift(ball, p, next);
+      const rawVx =
+        Phaser.Math.Clamp((ball.x - p.x) * T.hitVxFactor, -T.hitVxMax, T.hitVxMax) +
+        p.vx * T.playerVxTransfer +
+        this.drift(ball, p, next);
+      ball.vx = Phaser.Math.Clamp(rawVx, -T.hitVxMax * 1.25, T.hitVxMax * 1.25);
     }
 
     ball.hitCooldown = T.hitCooldown;
@@ -243,7 +341,45 @@ export class World extends Phaser.Events.EventEmitter {
     return dir * (T.soloDriftMin + (T.soloDriftMax - T.soloDriftMin) * this.rng());
   }
 
+  private spawnTarget(): void {
+    ensureTargetTexture(this.scene);
+    const kind: 'bonus' | 'calm' = this.balls.some((b) => b.speedMult > 1.15) ? 'calm' : 'bonus';
+    const x = 180 + Math.floor(this.rng() * (T.width - 360));
+    const y = 165 + Math.floor(this.rng() * 140);
+    const inkHex = kind === 'calm' ? INK_HEX.blue : INK_HEX.pink;
+    const inkCss = kind === 'calm' ? INK.blue : INK.pink;
+    const ring = this.scene.add.image(0, 0, RISO_KEYS.targetRing).setScale(S).setTint(inkHex).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    const label = this.scene.add
+      .text(0, 0, kind === 'calm' ? 'SLOW BALL' : '★ +250', risoText(10, inkCss, 'mono'))
+      .setFontStyle('bold')
+      .setOrigin(0.5)
+      .setBlendMode(Phaser.BlendModes.MULTIPLY);
+    const container = this.scene.add.container(x, y, [ring, label]).setDepth(8);
+    this.target = {
+      x,
+      y,
+      kind,
+      bornS: this.elapsedRulesS,
+      spawnedAtMs: this.lastRenderTime,
+      container,
+      ring,
+      label,
+      shownScale: NaN,
+      shownStep: -1,
+      shownVis: true,
+    };
+  }
+
+  private clearTarget(delayS: number): void {
+    if (this.target) {
+      this.target.container.destroy();
+      this.target = null;
+    }
+    this.nextTargetAtS = this.elapsedRulesS + delayS;
+  }
+
   render(dt: number, time: number): void {
+    this.lastRenderTime = time;
     for (const p of this.players) p.render(dt, time, pickLookTarget(p.x, p.y - p.h / 2, p.id, this.balls, this.look));
     for (const b of this.balls) {
       b.render(dt, time);
@@ -272,9 +408,30 @@ export class World extends Phaser.Events.EventEmitter {
       arrow.setVisible(on);
       if (on) arrow.setPosition(p.x, p.top - 22 + bob);
     }
+
+    if (this.target) {
+      const t = this.target;
+      const sc = slamScale(time - t.spawnedAtMs);
+      if (sc !== t.shownScale) {
+        t.shownScale = sc;
+        t.container.setScale(sc);
+      }
+      const step = Math.floor(Math.max(0, time) / (STEP_MS * 2));
+      if (step !== t.shownStep) {
+        t.shownStep = step;
+        t.ring.setRotation(step * 0.08);
+      }
+      const rem = T.targetLifetimeS - (this.elapsedRulesS - t.bornS);
+      const vis = rem > 2.5 || Math.floor(Math.max(0, time) / STEP_MS) % 2 === 0;
+      if (vis !== t.shownVis) {
+        t.shownVis = vis;
+        t.container.setVisible(vis);
+      }
+    }
   }
 
   destroy(): void {
+    this.clearTarget(0);
     for (const p of this.players) p.destroy();
     for (const b of [...this.balls]) this.removeBall(b);
     for (const a of this.arrows.values()) a.destroy();

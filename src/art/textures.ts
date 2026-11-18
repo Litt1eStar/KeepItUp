@@ -15,8 +15,8 @@ import { ballArt, drawBallFill, drawBallLine, drawIncomingRing, drawShadow, inco
 import { drawStage } from './stage';
 import { SHADOW_STEPS } from './shadow';
 import {
-  BOARD_CARD, DOT_TEX, LETTER_BOX, PAUSE_CARD, RECEIPT, REPORT_CARD, STAMP_IDS, TICKET,
-  drawBoardReceipt, drawDot, drawFaintStamp, drawLetterBox, drawPauseCard, drawReceipt, drawReportCard, drawStamp, drawTicket, stampSize,
+  BOARD_CARD, DOT_TEX, LETTER_BOX, PAUSE_CARD, RECEIPT, REPORT_CARD, STAMP_IDS, TARGET_TEX, TICKET,
+  drawBoardReceipt, drawDot, drawFaintStamp, drawLetterBox, drawPauseCard, drawReceipt, drawReportCard, drawStamp, drawTargetRing, drawTicket, stampSize,
   type ReceiptRowData, type StampId,
 } from './ui';
 import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
@@ -56,6 +56,7 @@ export const RISO_KEYS = {
   gameOverReceipt: 'riso:gameOverReceipt',
   letterBox: 'riso:letterBox',
   pauseCard: 'riso:pauseCard',
+  targetRing: 'riso:targetRing',
   dot: 'riso:dot',
   dotEmpty: 'riso:dotEmpty',
 } as const;
@@ -146,6 +147,7 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
   tex(K.reportCard, REPORT_CARD.w, REPORT_CARD.h, drawReportCard);
   tex(K.letterBox, LETTER_BOX.w, LETTER_BOX.h, drawLetterBox);
   tex(K.pauseCard, PAUSE_CARD.w, PAUSE_CARD.h, drawPauseCard);
+  tex(K.targetRing, TARGET_TEX, TARGET_TEX, drawTargetRing);
   tex(K.dot, DOT_TEX, DOT_TEX, (c) => drawDot(c, true));
   tex(K.dotEmpty, DOT_TEX, DOT_TEX, (c) => drawDot(c, false));
 }
@@ -191,6 +193,13 @@ export function ensureFaintStamp(scene: Phaser.Scene, id: StampId): void {
   const measure = document.createElement('canvas').getContext('2d')!;
   const { w, h } = stampSize(measure, id);
   canvasTexture(scene, key, w, h, (c) => drawFaintStamp(c, id, w, h));
+}
+
+/** Lazily generate the mid-air poster target ring texture if not already registered. */
+export function ensureTargetTexture(scene: Phaser.Scene): void {
+  const key = RISO_KEYS.targetRing;
+  if (scene.textures.exists(key)) return;
+  canvasTexture(scene, key, TARGET_TEX, TARGET_TEX, drawTargetRing);
 }
 
 /** Render or update the live 5-row Lobby leaderboard receipt texture. */

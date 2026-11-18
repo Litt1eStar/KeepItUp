@@ -3,6 +3,7 @@ import { TUNING as T } from '../config/tuning';
 import type { PlayerId } from '../config/players';
 import { spawnPulse } from '../art/motion';
 import { RisoBallView } from '../art/views/RisoBallView';
+import { stepBallSpin } from '../logic/movement';
 
 /**
  * Ball with custom physics. Each ball has its own speed multiplier which scales *time*
@@ -13,6 +14,7 @@ export class Ball {
   y: number;
   vx = 0;
   vy = 0;
+  spin = 1.8;
   speedMult = 1;
   target: PlayerId;
   hitCooldown = 0;
@@ -57,6 +59,9 @@ export class Ball {
     }
 
     const sdt = dt * this.speedMult;
+    const sp = stepBallSpin(this.vx, this.spin, sdt, T);
+    this.vx = sp.vx;
+    this.spin = sp.spin;
     this.vy += T.ballGravity * sdt;
     this.x += this.vx * sdt;
     this.y += this.vy * sdt;
@@ -64,14 +69,16 @@ export class Ball {
     if (this.x - this.r < 0) {
       this.x = this.r;
       this.vx = Math.abs(this.vx) * T.wallBounce;
+      this.spin = -this.spin * 0.75;
     } else if (this.x + this.r > T.width) {
       this.x = T.width - this.r;
       this.vx = -Math.abs(this.vx) * T.wallBounce;
+      this.spin = -this.spin * 0.75;
     }
   }
 
   /** Draw the ball; `time` (ms) drives boil, stepped spin, ink punch and the spawn pulse. */
-  render(_dt: number, time: number): void {
+  render(dt: number, time: number): void {
     const v = this.view;
     if (this.target !== this.shownInk) {
       this.shownInk = this.target;
@@ -82,6 +89,7 @@ export class Ball {
     const spawning = this.floatTime > 0;
     v.setSpawning(spawning);
     v.setScaleMul(spawning ? spawnPulse(time) : 1);
+    v.stepSpin(this.spin, dt * this.speedMult);
     v.tick(time);
     // Fall warning: halftone shadow gets denser as the ball drops, pink while the ball is in danger.
     v.updateShadow(this.x, this.bottom, this.inDanger);

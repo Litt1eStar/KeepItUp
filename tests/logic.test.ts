@@ -3,7 +3,10 @@ import { pickNextTarget, pickSpawnTarget, resolveHit, entersDangerZone } from '.
 import { comboMultiplier, hitPoints, timePoints } from '../src/logic/Scoring';
 import { landingX, solveDashPass } from '../src/logic/dashPass';
 import { pickLookTarget } from '../src/logic/lookTarget';
-import { applyJumpCut, effectivePlayerGravity, stepHorizontalVelocity } from '../src/logic/movement';
+import {
+  applyJumpCut, computeHitSpin, effectivePlayerGravity, resolveBallCollision, resolvePlayerBump,
+  stepBallSpin, stepHorizontalVelocity,
+} from '../src/logic/movement';
 import { LocalLeaderboard, type KeyValueStore } from '../src/services/Leaderboard';
 import { TUNING } from '../src/config/tuning';
 
@@ -180,5 +183,46 @@ describe('movement physics', () => {
     expect(applyJumpCut(cut.vy, false, true, TUNING)).toEqual({ vy: cut.vy, cutApplied: true });
     // Near peak, no further cut
     expect(applyJumpCut(-50, false, false, TUNING)).toEqual({ vy: -50, cutApplied: false });
+  });
+
+  it('resolvePlayerBump launches stationary teammates on dash and bounces mutual dashers', () => {
+    const a = { vx: 1100, vy: 0, dashing: true, dashDir: 1 as const, dashTime: 0.1 };
+    const b = { vx: 0, vy: 0, dashing: false, dashDir: -1 as const, dashTime: 0 };
+    expect(resolvePlayerBump(a, b, 1, TUNING)).toBe(true);
+    expect(b.vx).toBe(TUNING.dashBumpVx);
+    expect(b.vy).toBe(-TUNING.dashBumpVy);
+    expect(a.vx).toBe(-TUNING.dashBumpRecoilVx);
+    expect(a.dashTime).toBe(0);
+
+    const c = { vx: 1100, vy: 0, dashing: true, dashDir: 1 as const, dashTime: 0.1 };
+    const d = { vx: -1100, vy: 0, dashing: true, dashDir: -1 as const, dashTime: 0.1 };
+    expect(resolvePlayerBump(c, d, 1, TUNING)).toBe(true);
+    expect(c.vx).toBeCloseTo(-TUNING.dashBumpVx * 0.65);
+    expect(d.vx).toBeCloseTo(TUNING.dashBumpVx * 0.65);
+  });
+
+  it('imparts bounded spin on hit and curves/decays velocity via Magnus force', () => {
+    const spin = computeHitSpin(240, 200, 72, TUNING.moveSpeed, TUNING);
+    expect(spin).toBeGreaterThan(0);
+    expect(Math.abs(spin)).toBeLessThanOrEqual(TUNING.ballSpinMax);
+    expect(Math.abs(computeHitSpin(500, 0, 10, TUNING.moveSpeed * 5, TUNING))).toBe(TUNING.ballSpinMax);
+
+    const stepped = stepBallSpin(100, spin, 0.25, TUNING);
+    expect(stepped.vx).toBeGreaterThan(100);
+    expect(stepped.spin).toBeLessThan(spin);
+    expect(stepped.spin).toBeGreaterThan(0);
+  });
+
+  it('resolveBallCollision separates overlapping balls and exchanges normal velocity', () => {
+    const farA = { x: 100, y: 200, vx: 100, vy: 0, r: 44, spin: 0 };
+    const farB = { x: 300, y: 200, vx: -100, vy: 0, r: 44, spin: 0 };
+    expect(resolveBallCollision(farA, farB)).toBe(false);
+
+    const a = { x: 100, y: 200, vx: 120, vy: 0, r: 44, spin: 0 };
+    const b = { x: 170, y: 200, vx: -80, vy: 0, r: 44, spin: 0 };
+    expect(resolveBallCollision(a, b)).toBe(true);
+    expect(b.x - a.x).toBeGreaterThanOrEqual(88 - 1e-6);
+    expect(a.vx).toBeLessThan(0);
+    expect(b.vx).toBeGreaterThan(0);
   });
 });

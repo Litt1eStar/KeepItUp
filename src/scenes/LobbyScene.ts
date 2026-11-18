@@ -3,7 +3,7 @@ import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
 import { PLAYERS, type PlayerId } from '../config/players';
 import { InputManager } from '../input/InputManager';
-import { World, type HitEvent } from '../game/World';
+import { World, type BumpEvent, type HitEvent } from '../game/World';
 import { drawStage } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
@@ -86,6 +86,10 @@ export class LobbyScene extends Phaser.Scene {
     this.world.on('dash', (p: Player) => {
       AudioManager.play('dash');
       this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
+    });
+    this.world.on('bump', (e: BumpEvent) => {
+      AudioManager.play('hit');
+      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'hit', 2);
     });
     this.world.on('floor', (ball: Ball) => {
       this.juice.popup(ball.x, T.floorY - 30, 'oops! (practice)', 'black', 16);

@@ -415,6 +415,42 @@ export function drawPauseCard(ctx: Ctx): void {
 // ---------------------------------------------------------------- next-ball dots
 
 export const DOT_TEX = 10;
+export const TARGET_TEX = 88;
+export const TARGET_RING_R = 38;
+
+/** Mid-air poster target ring in white (tint at runtime with pink/blue + MULTIPLY). */
+export function drawTargetRing(ctx: Ctx): void {
+  const c = TARGET_TEX / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(c, c, 36, 0, Math.PI * 2);
+  ctx.arc(c, c, 27, 0, Math.PI * 2);
+  ctx.clip('evenodd');
+  fillHalftone(ctx, 0, 0, TARGET_TEX, TARGET_TEX, '#fff', 0.25, 3.5, INK_ANGLE.pink);
+  ctx.restore();
+
+  strokeWobbly(ctx, circlePoints(c, c, 37, 36), 341, 0.5, 2.6, '#fff');
+
+  ctx.save();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([5, 4]);
+  tracePath(ctx, wobblePoints(circlePoints(c, c, 27, 32), 342, 0.3));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+    ctx.moveTo(c + dx * 22, c + dy * 22);
+    ctx.lineTo(c + dx * 41, c + dy * 41);
+  }
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(c, c, 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+  mottle(ctx, TARGET_TEX, TARGET_TEX, 340, 0.3);
+}
 
 /** Next-ball row dot (filled or empty outline), centered in DOT_TEX. */
 export function drawDot(ctx: Ctx, filled: boolean, seed = 0): void {

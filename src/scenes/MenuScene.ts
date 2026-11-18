@@ -4,7 +4,7 @@ import { S } from '../config/render';
 import { PLAYERS } from '../config/players';
 import { InputManager } from '../input/InputManager';
 import { BotInput } from '../input/BotInput';
-import { World, type HitEvent } from '../game/World';
+import { World, type BumpEvent, type HitEvent } from '../game/World';
 import { drawStage } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
@@ -132,6 +132,9 @@ export class MenuScene extends Phaser.Scene {
     });
     this.world.on('land', (p: Player) => {
       this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1);
+    });
+    this.world.on('bump', (e: BumpEvent) => {
+      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'hit', 2);
     });
     this.world.on('floor', (ball: Ball) => {
       this.juice.splat(ball.x, T.floorY - 12, PLAYER_INK[ball.target], 'small', 2);

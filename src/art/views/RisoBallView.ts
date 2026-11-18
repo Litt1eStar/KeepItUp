@@ -27,6 +27,8 @@ export class RisoBallView {
   private sy = 1;
   private scaleMul = 1;
   private spawning = false;
+  private customAngle = 0;
+  private useCustomSpin = false;
 
   constructor(private readonly scene: Phaser.Scene, inkId: PlayerId, opts: { shadow?: boolean } = {}) {
     ensureIncomingTexture(scene, inkId);
@@ -61,6 +63,12 @@ export class RisoBallView {
     this.scaleMul = k;
   }
 
+  /** Advance physical spin angle (rad) by `spinRadPerS * dt`; switches tick() to stepped physical spin. */
+  stepSpin(spinRadPerS: number, dt: number): void {
+    this.useCustomSpin = true;
+    this.customAngle += spinRadPerS * dt;
+  }
+
   /** Boil, stepped spin and ink-change punch. */
   tick(tMs: number): void {
     const v = boilVariant(tMs);
@@ -68,7 +76,7 @@ export class RisoBallView {
       this.variant = v;
       this.line.setTexture(RISO_KEYS.ballLine(v));
     }
-    const a = spinAngle(tMs);
+    const a = this.useCustomSpin ? Math.round(this.customAngle / 0.14) * 0.14 : spinAngle(tMs);
     if (a !== this.angle) {
       this.angle = a;
       this.line.setRotation(a);
