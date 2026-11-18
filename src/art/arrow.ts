@@ -9,7 +9,7 @@
  * ARROW_TEX square, centered: use origin (0.5, 0.5). No Phaser import.
  */
 import { PLAYERS, type PlayerId } from '../config/players';
-import { INK, PLAYER_INK } from './palette';
+import { INK, playerColor } from './palette';
 import { misregOffset, mottle, tracePath, wobblePoints } from './riso';
 import { densify, inkLayer, knockOut, traceShape, type Pt } from './draw';
 
@@ -71,7 +71,7 @@ export function drawArrow(ctx: Ctx, id: PlayerId, up: boolean): void {
     c.beginPath();
     tri.forEach(([x, y], k) => (k === 0 ? c.moveTo(x, y) : c.lineTo(x, y)));
     c.closePath();
-    c.fillStyle = INK[PLAYER_INK[id]];
+    c.fillStyle = playerColor(id).css;
     c.fill();
     knockOut(c, () => traceShape(c, shape, gx, gy, GLYPH_SIZE + 0.8));
     mottle(c, w, h, 600 + id * 7 + (up ? 3 : 0), 0.2);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   GAME_OVER, LOBBY, MENU_ITEMS, MENU_LAYOUT, PAUSE_ITEMS, PAUSE_LAYOUT, PROMPT_BLINK_ON, PROMPT_BLINK_PERIOD, REPORT_LINE_STEP_MS, ROLLER_STEP_MS, ROLLER_STEPS,
-  boardCountdownLabel, entryCountdownLabel, formatDotRow, joinPrompt, menuItemY, padLabel, padSlotLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
+  boardCountdownLabel, charSelectPrompt, entryCountdownLabel, formatDotRow, joinPrompt, menuItemY, padLabel, padSlotLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
   reportLinesVisible, rollerCoverWidth, rollerExitWidth, slotRotation, slotX, teamLabel, ticketX,
 } from '../src/art/screens';
 import { STEP_MS } from '../src/art/motion';
@@ -19,7 +19,9 @@ describe('lobby helpers & layout', () => {
     expect(xs[1]).toBeLessThan(xs[2]);
     expect(xs[2] + TICKET.w).toBeLessThan(LOBBY.receipt.x);
     expect(LOBBY.receipt.x + RECEIPT.w).toBeLessThan(T.width);
-    expect(LOBBY.tickets.y + TICKET.h).toBeLessThan(LOBBY.tickets.statusY);
+    expect(LOBBY.tickets.y + TICKET.h).toBeLessThan(LOBBY.tickets.charY);
+    expect(LOBBY.tickets.charY).toBeLessThan(LOBBY.tickets.statusY);
+    expect(LOBBY.tickets.statusY).toBeLessThan(LOBBY.tickets.padY);
     expect(LOBBY.tickets.padY + 16).toBeLessThan(T.floorY);
     expect(LOBBY.receipt.y + RECEIPT.h).toBeLessThan(T.floorY);
     const titleBottom = LOBBY.title.y + (LOBBY.title.words.length - 1) * LOBBY.title.lineStep + LOBBY.title.size;
@@ -27,11 +29,13 @@ describe('lobby helpers & layout', () => {
     expect(LOBBY.masthead.ruleY).toBeLessThan(LOBBY.tickets.y);
   });
 
-  it('formats join prompts and gamepad labels', () => {
+  it('formats join prompts, character select bars and gamepad labels', () => {
     expect(joinPrompt(0, false)).toContain('W');
     expect(joinPrompt(1, false)).toContain('PAD A');
     expect(joinPrompt(2, false)).toContain('PAD A');
     expect(joinPrompt(0, true)).toBe(joinPrompt(2, true));
+    expect(charSelectPrompt(0, false)).toContain('PIK (1/6)');
+    expect(charSelectPrompt(0, true)).toContain('[1/CLICK]');
     expect(padLabel(null, false)).toBe('KEYBOARD');
     expect(padLabel(0, true)).toBe('GAMEPAD 1 READY');
     expect(padLabel(1, false)).toBe('PAD 2 (NO PAD)');

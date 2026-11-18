@@ -42,6 +42,14 @@ export class RisoBallView {
     this.shadow = opts.shadow ? scene.add.image(0, this.shadowY, RISO_KEYS.shadow(0)).setScale(S).setBlendMode(Phaser.BlendModes.MULTIPLY) : null;
   }
 
+  /** Rebind textures cleanly after regenerating player ink textures at runtime. */
+  refreshInk(id: PlayerId): void {
+    ensureIncomingTexture(this.scene, id);
+    const m = ballMisreg(id);
+    this.incoming.setTexture(RISO_KEYS.incoming(id));
+    this.fill.setTexture(RISO_KEYS.ballFill(id)).setPosition(m.dx, m.dy);
+  }
+
   /** Change the ink with a quick stamp-squash punch (tMs = now). */
   setInk(id: PlayerId, tMs: number): void {
     ensureIncomingTexture(this.scene, id);

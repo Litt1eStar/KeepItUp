@@ -136,11 +136,11 @@ export class Juice {
    * Prints at full size, holds SPLAT_HOLD_STEPS steps (or `holdSteps`), shrinks in two steps, then recycles.
    * size 'floor' prints under the characters (depth 4), the rest over the action.
    */
-  splat(x: number, y: number, ink: InkName, size: SplatSize = 'hit', holdSteps = SPLAT_HOLD_STEPS): void {
+  splat(x: number, y: number, ink: InkName | number, size: SplatSize = 'hit', holdSteps = SPLAT_HOLD_STEPS): void {
     const s = this.freeSplats.pop() ?? this.makeSplat();
     const v = Math.floor(this.rng() * BOIL_VARIANTS) % BOIL_VARIANTS;
     const rot = this.rng() * Math.PI * 2;
-    const tint = INK_HEX[ink];
+    const tint = typeof ink === 'number' ? ink : INK_HEX[ink];
     const depth = size === 'floor' ? DEPTH.floorSplat : DEPTH.splat;
     s.born = this.now;
     s.base = SPLAT_SIZE_MUL[size];
@@ -154,13 +154,13 @@ export class Juice {
   }
 
   /** Space Mono bold popup in `ink` (yellow prints black): rises in POPUP_RISE steps, then disappears. */
-  popup(x: number, y: number, text: string, ink: InkName = 'black', size = 18): void {
+  popup(x: number, y: number, text: string, ink: InkName | string = 'black', size = 18): void {
     const p = this.freePopups.pop() ?? this.makePopup();
     p.born = this.now;
     y = Math.max(POPUP_MIN_Y, y); // balls fly above the screen; keep the text on the paper, under the HUD
     p.y = y;
     p.shown = 0;
-    const color = INK[readableInk(ink)];
+    const color = ink in INK ? INK[readableInk(ink as InkName)] : ink;
     if (color !== p.color || size !== p.size) {
       // colour + size in a single restyle (one redraw), only when they differ from the last use
       p.color = color;

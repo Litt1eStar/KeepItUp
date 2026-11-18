@@ -12,10 +12,10 @@ import { SPLAT_SIZE, splatLineExtent, splatMaxExtent, splatShapes } from '../src
 import { PLAY_FIELD, STAGE_QUIET_Y, stageInkCoverage, sunTopY } from '../src/art/stage';
 import { polygonClearance, shapePoints, type Pt } from '../src/art/draw';
 import { jitterDots, halftoneDots } from '../src/art/riso';
-import { INK_ANGLE } from '../src/art/palette';
+import { INK_ANGLE, CHAR_STYLE_COLORS, playerColor, playerReadableCss, styleReadableCss } from '../src/art/palette';
 import { BOIL_VARIANTS, RISO_KEYS, allRisoKeys } from '../src/art/textures';
 import { TUNING } from '../src/config/tuning';
-import { CHAR_STYLE_IDS, type PlayerId } from '../src/config/players';
+import { CHAR_STYLE_IDS, PLAYERS, resetPlayerCharStyles, setPlayerCharStyle, type PlayerId } from '../src/config/players';
 
 const IDS: PlayerId[] = [0, 1, 2];
 
@@ -103,6 +103,20 @@ describe('characters', () => {
         }
       }
     }
+  });
+  it('assigns 6 distinct colors to the 6 variants and keeps yellow readable in text', () => {
+    const hexes = new Set(CHAR_STYLE_IDS.map((s) => CHAR_STYLE_COLORS[s].hex));
+    expect(hexes.size).toBe(6);
+    expect(styleReadableCss(2)).toBe('#1E1B1A');
+    expect(styleReadableCss(3)).toBe(CHAR_STYLE_COLORS[3].css);
+    try {
+      setPlayerCharStyle(0, 4);
+      expect(playerColor(0).hex).toBe(CHAR_STYLE_COLORS[4].hex);
+      expect(playerReadableCss(0)).toBe(CHAR_STYLE_COLORS[4].css);
+    } finally {
+      resetPlayerCharStyles();
+    }
+    expect(PLAYERS[0].charStyle).toBe(0);
   });
 });
 

@@ -90,6 +90,18 @@ export class World extends Phaser.Events.EventEmitter {
     return this.players.find((p) => p.id === id);
   }
 
+  /** Rebind player/ball/arrow sprite textures after regenerating player ink textures at runtime. */
+  refreshPlayerArt(id: PlayerId): void {
+    this.playerById(id)?.view.refreshStyle();
+    this.arrows.get(id)?.setTexture(RISO_KEYS.arrow(id));
+    for (const b of this.balls) {
+      if (b.target === id) {
+        b.view.refreshInk(id);
+        this.offscreen.get(b)?.setTexture(RISO_KEYS.offscreen(id));
+      }
+    }
+  }
+
   addPlayer(id: PlayerId): Player {
     const existing = this.playerById(id);
     if (existing) return existing;

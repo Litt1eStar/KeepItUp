@@ -11,7 +11,7 @@
  * All ball textures are centered: use origin (0.5, 0.5). Offset the fill by ballMisreg(id).
  */
 import { PLAYERS, type PlayerId } from '../config/players';
-import { INK, INK_ANGLE, PLAYER_INK } from './palette';
+import { INK, INK_ANGLE, playerColor } from './palette';
 import { circlePoints, fillHalftone, halftoneDots, jitterDots, misregOffset, mottle, speckle, tracePath, wobblePoints } from './riso';
 import { knockOut, strokeWobbly, traceShape } from './draw';
 import { SHADOW_STEPS } from './shadow';
@@ -68,7 +68,7 @@ export function shadowTexSize(r: number): { w: number; h: number } {
 export function drawBallFill(ctx: Ctx, id: PlayerId, r: number, seed = 1): void {
   const a = ballArt(r);
   const c = a.size / 2;
-  const ink = INK[PLAYER_INK[id]];
+  const ink = playerColor(id).css;
   const shape = PLAYERS[id].shape;
   const sy = c + (shape === 'triangle' ? r * 0.08 : 0);
   ctx.save();
@@ -169,13 +169,14 @@ export function incomingTexSize(r: number): number {
 export function drawIncomingRing(ctx: Ctx, id: PlayerId, r: number): void {
   const size = incomingTexSize(r);
   const c = size / 2;
-  const ink = INK[PLAYER_INK[id]];
+  const col = playerColor(id);
+  const ink = col.css;
   ctx.save();
   ctx.beginPath();
   ctx.arc(c, c, r * 1.42, 0, Math.PI * 2);
   ctx.arc(c, c, r * 1.04, 0, Math.PI * 2);
   ctx.clip('evenodd');
-  fillHalftone(ctx, 0, 0, size, size, ink, 0.28, Math.max(3, r * 0.11), INK_ANGLE[PLAYER_INK[id]], { jitterSeed: 980 + id });
+  fillHalftone(ctx, 0, 0, size, size, ink, 0.28, Math.max(3, r * 0.11), col.angle, { jitterSeed: 980 + id });
   ctx.restore();
 
   ctx.save();

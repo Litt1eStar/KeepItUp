@@ -2,7 +2,7 @@
  * Pure layout, formatting and stepped timing for the Lobby, Game Over and PrintRoller screens.
  * Phaser-free so every coordinate and schedule is unit-tested in node.
  */
-import { PLAYERS, formatKeyName, type PlayerId } from '../config/players';
+import { CHAR_STYLE_COUNT, PLAYERS, formatKeyName, type PlayerId } from '../config/players';
 import { TUNING as T } from '../config/tuning';
 import { MOTION_STEP_MS, STEP_MS } from './motion';
 import { BOARD_CARD, CHAR_NAMES, PAUSE_CARD, REPORT_CARD, TICKET } from './ui';
@@ -14,7 +14,7 @@ export { CHAR_NAMES };
 export const LOBBY = {
   title: { x: 28, y: 6, lineStep: 28, size: 32, words: ['KEEP', 'IT', 'UP!'] as const },
   masthead: { x: 132, issueY: 14, issueSize: 11, headlineY: 32, headlineSize: 24, subY: 64, subSize: 11, ruleY: 90, ruleW: 494 },
-  tickets: { x0: 28, y: 112, gap: 14, scale: 1, stampOffsetX: 115, stampOffsetY: 50, stampRot: -0.18, stampScale: 0.72, statusY: 234, padY: 252 },
+  tickets: { x0: 28, y: 112, gap: 14, scale: 1, stampOffsetX: 115, stampOffsetY: 50, stampRot: -0.18, stampScale: 0.72, charY: 233, statusY: 250, padY: 267 },
   receipt: { x: 664, y: 18 },
   startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'SPACE / START PLAY · ESC CONTROLS · SOLO OK · F FULLSCREEN' },
 } as const;
@@ -22,6 +22,15 @@ export const LOBBY = {
 /** Left edge of player `id`'s ticket stub on the lobby zine cover. */
 export function ticketX(id: PlayerId): number {
   return LOBBY.tickets.x0 + id * (TICKET.w * LOBBY.tickets.scale + LOBBY.tickets.gap);
+}
+
+/** Character selector bar printed below each player's lobby ticket stub. */
+export function charSelectPrompt(id: PlayerId, joined: boolean): string {
+  const num = PLAYERS[id].charStyle + 1;
+  if (joined) return `◄ [${id + 1}/CLICK] ${CHAR_NAMES[id]} (${num}/${CHAR_STYLE_COUNT}) ►`;
+  const left = formatKeyName(PLAYERS[id].keys.left);
+  const right = formatKeyName(PLAYERS[id].keys.right);
+  return `◄ ${left}/${right} · ${CHAR_NAMES[id]} (${num}/${CHAR_STYLE_COUNT}) ►`;
 }
 
 /** Label printed under a player's lobby ticket stub. */

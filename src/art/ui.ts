@@ -3,8 +3,8 @@
  * player ticket stubs, the high-score receipt and the next-ball dots. Splats live in splat.ts.
  * No Phaser import; all sizes logical.
  */
-import { CHAR_STYLE_NAMES, PLAYERS, formatTicketControls, type PlayerId } from '../config/players';
-import { INK, INK_ANGLE, INK_HEX, PLAYER_INK, type InkName } from './palette';
+import { CHAR_STYLE_IDS, CHAR_STYLE_NAMES, PLAYERS, formatTicketControls, type PlayerId } from '../config/players';
+import { CHAR_STYLE_COLORS, INK, INK_ANGLE, INK_HEX, playerColor, styleReadableCss, type InkName } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, paperGrain, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { DISPLAY_FONT, MONO_FONT } from './type';
 import { densify, font, handLine, inkLayer, knockOut, roundRectPath, strokeWobbly, traceShape, type Pt } from './draw';
@@ -109,8 +109,8 @@ export function drawTicket(ctx: Ctx, id: PlayerId): void {
 
 function drawTicketBody(ctx: Ctx, id: PlayerId): void {
   const { w, h, perfX: px, notchR: nr } = TICKET;
-  const inkName = PLAYER_INK[id];
-  const ink = INK[inkName];
+  const col = playerColor(id);
+  const ink = col.css;
   const B = INK.black;
   ctx.save();
   roundRectPath(ctx, 1.5, 1.5, w - 3, h - 3, 3);
@@ -124,7 +124,7 @@ function drawTicketBody(ctx: Ctx, id: PlayerId): void {
     c.arc(92, 52, 30, 0, Math.PI * 2);
     c.arc(92, 54, 21, 0, Math.PI * 2); // halo only: keep the face (eye whites) clean
     c.clip('evenodd');
-    fillHalftone(c, 62, 22, 60, 60, ink, 0.34, 3.6, INK_ANGLE[inkName]);
+    fillHalftone(c, 62, 22, 60, 60, ink, 0.34, 3.6, col.angle);
     c.restore();
     traceShape(c, PLAYERS[id].shape, px / 2, 54, 15);
     c.fillStyle = ink;
@@ -161,15 +161,37 @@ function drawTicketBody(ctx: Ctx, id: PlayerId): void {
   ctx.scale(0.8, 0.8);
   drawCharacter(ctx, id, 0, 0, id);
   ctx.restore();
+  // 6-color variant dots bar + active ring
+  for (let i = 0; i < CHAR_STYLE_IDS.length; i++) {
+    const style = CHAR_STYLE_IDS[i];
+    const dx = 129 + i * 9.5;
+    const dy = 31;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(dx, dy, 3.4, 0, Math.PI * 2);
+    ctx.fillStyle = CHAR_STYLE_COLORS[style].css;
+    ctx.fill();
+    ctx.lineWidth = 0.9;
+    ctx.strokeStyle = B;
+    ctx.stroke();
+    if (PLAYERS[id].charStyle === style) {
+      ctx.beginPath();
+      ctx.arc(dx, dy, 5.2, 0, Math.PI * 2);
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = B;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   ctx.fillStyle = B;
-  font(ctx, 6.5, MONO_FONT, 700);
-  ctx.fillText('◄ CHAR ►', 126, 36);
-  let size = 30;
+  let size = 27;
   font(ctx, size, DISPLAY_FONT);
   const maxW = w - 10 - 126;
   const nw = ctx.measureText(CHAR_NAMES[id]).width;
   if (nw > maxW) { size = Math.floor((size * maxW) / nw); font(ctx, size, DISPLAY_FONT); }
-  ctx.fillText(CHAR_NAMES[id], 126, 66);
+  ctx.fillText(CHAR_NAMES[id], 126, 65);
+  font(ctx, 5.8, MONO_FONT, 700);
+  ctx.fillText('◄ CHANGE CHAR ►', 126, 77);
   handLine(ctx, densify([[px + 8, 84], [w - 9, 84]], 6), 130 + id, 0.8, B);
   font(ctx, 8, MONO_FONT);
   ctx.fillText(formatTicketControls(PLAYERS[id].keys), px + 8, 99);
@@ -497,4 +519,50 @@ export const STAMP_INK_FALLBACK = INK_HEX.black;
 export function stampTint(ink: InkName | number): number {
   const hex = typeof ink === 'number' ? ink : INK_HEX[ink];
   return STAMP_INKS_ALLOWED.includes(hex) ? hex : STAMP_INK_FALLBACK;
+}
+
+/** Main Menu showcase card displaying all 6 riso character variants in a 3×2 poster grid. */
+export function drawCrewShowcaseCard(ctx: Ctx, w = 324, h = 176): void {
+  const B = INK.black;
+  ctx.save();
+  roundRectPath(ctx, 1, 1, w - 2, h - 2, 2);
+  ctx.clip();
+  paperGrain(ctx, w, h, 355);
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = B;
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(1.25, 1.25, w - 2.5, h - 2.5);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(4.5, 4.5, w - 9, h - 9);
+  ctx.fillStyle = INK.pink;
+  ctx.fillRect(6, 6, w - 12, 8);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = B;
+  font(ctx, 10, MONO_FONT, 700);
+  ctx.fillText('MEET THE CREW · 6 VARIANTS', w / 2, 27);
+
+  const cols = [62, w / 2, w - 62];
+  const rows = [60, 121];
+  for (let i = 0; i < CHAR_STYLE_IDS.length; i++) {
+    const style = CHAR_STYLE_IDS[i];
+    const cx = cols[i % 3];
+    const cy = rows[Math.floor(i / 3)];
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(0.58, 0.58);
+    drawCharacter(ctx, (style % 3) as PlayerId, 0, 0, 0, style);
+    ctx.restore();
+    ctx.fillStyle = styleReadableCss(style);
+    font(ctx, 8.5, MONO_FONT, 700);
+    ctx.fillText(CHAR_STYLE_NAMES[style], cx, cy + 28);
+  }
+
+  ctx.fillStyle = B;
+  font(ctx, 7.5, MONO_FONT, 700);
+  ctx.fillText('CLICK CREW TO CYCLE LIVE BOTS', w / 2, h - 10);
+  ctx.restore();
 }

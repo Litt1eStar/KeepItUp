@@ -12,7 +12,7 @@ import { comboMultiplier, hitPoints, timePoints } from '../logic/Scoring';
 import { leaderboard } from '../services/Leaderboard';
 import type { Ball } from '../entities/Ball';
 import type { Player } from '../entities/Player';
-import { INK, PAPER, PLAYER_INK } from '../art/palette';
+import { INK, PAPER, playerColor, playerReadableCss } from '../art/palette';
 import { risoText } from '../art/type';
 import { RISO_KEYS, refreshTicketTextures } from '../art/textures';
 import { formatScore } from '../art/ui';
@@ -162,19 +162,19 @@ export class GameScene extends Phaser.Scene {
 
   private wireEvents(): void {
     this.world.on('hit', (e: HitEvent) => this.onHit(e));
-    this.world.on('jump', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
-    this.world.on('land', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
+    this.world.on('jump', (p: Player) => this.juice.splat(p.x, p.y - 4, playerColor(p.id).hex, 'small', 1));
+    this.world.on('land', (p: Player) => this.juice.splat(p.x, p.y - 4, playerColor(p.id).hex, 'small', 1));
     this.world.on('dash', (p: Player) => {
       AudioManager.play('dash');
-      this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
+      this.juice.splat(p.x, p.y - 16, playerColor(p.id).hex, 'small', 1);
     });
     this.world.on('bump', (e: BumpEvent) => {
       AudioManager.play(e.kind === 'trampoline' ? 'trampoline' : 'bump');
-      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'hit', 2);
+      this.juice.splat(e.x, e.y, playerColor(e.ink).hex, 'hit', 2);
     });
     this.world.on('ballCollide', (e: BumpEvent) => {
       AudioManager.play('clack');
-      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'small', 2);
+      this.juice.splat(e.x, e.y, playerColor(e.ink).hex, 'small', 2);
     });
     this.world.on('targetHit', (e: TargetHitEvent) => this.onTargetHit(e));
     this.world.on('comboBreak', (ball: Ball) => {
@@ -206,8 +206,9 @@ export class GameScene extends Phaser.Scene {
   private onHit(e: HitEvent): void {
     if (this.over) return;
     this.hitStopMs = T.hitStopMs;
-    const ink = PLAYER_INK[e.player.id];
-    this.juice.splat(e.ball.x, e.ball.bottom, ink, e.jumpHit ? 'jump' : 'hit');
+    const col = playerColor(e.player.id);
+    const inkCss = playerReadableCss(e.player.id);
+    this.juice.splat(e.ball.x, e.ball.bottom, col.hex, e.jumpHit ? 'jump' : 'hit');
     AudioManager.play(e.jumpHit ? 'jumpHit' : 'hit');
 
     let nice = false;
@@ -216,7 +217,7 @@ export class GameScene extends Phaser.Scene {
       this.streak++;
       const pts = hitPoints(e.combo, T);
       this.score += pts;
-      this.juice.popup(e.ball.x, e.ball.y - 40, `+${Math.round(pts)}`, ink, 22);
+      this.juice.popup(e.ball.x, e.ball.y - 40, `+${Math.round(pts)}`, inkCss, 22);
       if (this.multiplayer) AudioManager.play('correct');
       const milestone = isComboMilestone(e.combo);
       if (milestone) {
@@ -234,7 +235,7 @@ export class GameScene extends Phaser.Scene {
     // At most one small stamp above the hitter (they'd overprint): WRONG > NICE > PASS.
     const local = localStampFor({ correct: e.correct, nice, pass: e.dashPass && this.multiplayer });
     if (local === 'WRONG') this.juice.stamp('WRONG', e.player.x, e.player.top - 46);
-    else if (local) this.juice.stamp(local, e.player.x, e.player.top - 46, ink, 0.8);
+    else if (local) this.juice.stamp(local, e.player.x, e.player.top - 46, col.baseInk, 0.8);
   }
 
   private onDrop(ball: Ball): void {

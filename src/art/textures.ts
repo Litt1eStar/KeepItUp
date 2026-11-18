@@ -16,7 +16,7 @@ import { drawStage } from './stage';
 import { SHADOW_STEPS } from './shadow';
 import {
   BOARD_CARD, DOT_TEX, LETTER_BOX, PAUSE_CARD, RECEIPT, REPORT_CARD, STAMP_IDS, TARGET_TEX, TICKET,
-  drawBoardReceipt, drawDot, drawFaintStamp, drawLetterBox, drawPauseCard, drawReceipt, drawReportCard, drawStamp, drawTargetRing, drawTicket, stampSize,
+  drawBoardReceipt, drawCrewShowcaseCard, drawDot, drawFaintStamp, drawLetterBox, drawPauseCard, drawReceipt, drawReportCard, drawStamp, drawTargetRing, drawTicket, stampSize,
   type ReceiptRowData, type StampId,
 } from './ui';
 import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
@@ -56,6 +56,7 @@ export const RISO_KEYS = {
   gameOverReceipt: 'riso:gameOverReceipt',
   letterBox: 'riso:letterBox',
   pauseCard: 'riso:pauseCard',
+  crewCard: 'riso:crewCard',
   targetRing: 'riso:targetRing',
   dot: 'riso:dot',
   dotEmpty: 'riso:dotEmpty',
@@ -177,16 +178,30 @@ export function refreshTicketTextures(scene: Phaser.Scene): void {
   }
 }
 
-/** Regenerate character body + ticket textures after switching character style in the lobby. */
+/** Regenerate character body, ball, arrow & ticket textures after switching character style in the lobby. */
 export function refreshCharacterTextures(scene: Phaser.Scene, id?: PlayerId): void {
   const K = RISO_KEYS;
+  const r = T.ballRadius;
+  const ball = ballArt(r);
+  const inc = incomingTexSize(r);
   const targets = id === undefined ? PLAYERS : [PLAYERS[id]];
   for (const p of targets) {
     canvasTexture(scene, K.charFill(p.id), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterFill(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy));
     for (let v = 0; v < BOIL_VARIANTS; v++) {
       canvasTexture(scene, K.charLine(p.id, v), CHAR_TEX.w, CHAR_TEX.h, (c) => drawCharacterLine(c, p.id, CHAR_TEX.cx, CHAR_TEX.cy, v));
     }
+    canvasTexture(scene, K.ballFill(p.id), ball.size, ball.size, (c) => drawBallFill(c, p.id, r));
+    canvasTexture(scene, K.incoming(p.id), inc, inc, (c) => drawIncomingRing(c, p.id, r));
+    canvasTexture(scene, K.arrow(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, false));
+    canvasTexture(scene, K.offscreen(p.id), ARROW_TEX.w, ARROW_TEX.h, (c) => drawArrow(c, p.id, true));
     canvasTexture(scene, K.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
+  }
+}
+
+/** Generate or refresh the Main Menu 6-character showcase card texture. */
+export function ensureCrewCardTexture(scene: Phaser.Scene, w = 324, h = 176): void {
+  if (!scene.textures.exists(RISO_KEYS.crewCard)) {
+    canvasTexture(scene, RISO_KEYS.crewCard, w, h, (c) => drawCrewShowcaseCard(c, w, h));
   }
 }
 

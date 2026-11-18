@@ -8,15 +8,16 @@ import { drawStage } from '../game/stage';
 import { Juice } from '../systems/Juice';
 import { AudioManager } from '../systems/AudioManager';
 import { leaderboard } from '../services/Leaderboard';
-import { INK, INK_HEX, PAPER, PLAYER_INK } from '../art/palette';
+import { INK, INK_HEX, PAPER, playerColor, playerReadableCss } from '../art/palette';
 import { risoText } from '../art/type';
 import { RISO_KEYS, refreshCharacterTextures, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
 import { TICKET, stampTint } from '../art/ui';
-import { demoStripVisible, readableInk } from '../art/hud';
+import { demoStripVisible } from '../art/hud';
+import { slamScale } from '../art/motion';
 import { StampSlam } from '../art/views/StampSlam';
 import { PrintRoller } from '../art/views/PrintRoller';
 import { PauseMenu } from '../art/views/PauseMenu';
-import { LOBBY, joinPrompt, padLabel, promptBlinkVisible, ticketX } from '../art/screens';
+import { LOBBY, charSelectPrompt, joinPrompt, padLabel, promptBlinkVisible, ticketX } from '../art/screens';
 import type { Ball } from '../entities/Ball';
 import type { Player } from '../entities/Player';
 
@@ -25,10 +26,13 @@ const MULTIPLY = Phaser.BlendModes.MULTIPLY;
 interface TicketCard {
   ticket: Phaser.GameObjects.Image;
   slam: StampSlam;
+  charText: Phaser.GameObjects.Text;
   status: Phaser.GameObjects.Text;
   pad: Phaser.GameObjects.Text;
   lastPad: string;
   lastVis: boolean;
+  slammedAt: number;
+  lastScale: number;
 }
 
 /**
@@ -78,22 +82,24 @@ export class LobbyScene extends Phaser.Scene {
 
     this.world.on('hit', (e: HitEvent) => {
       AudioManager.play(e.jumpHit ? 'jumpHit' : 'hit');
-      this.juice.splat(e.ball.x, e.ball.bottom, PLAYER_INK[e.player.id], 'small');
-      if (e.dashPass && this.joined.size > 1) this.juice.stamp('PASS', e.player.x, e.player.top - 46, PLAYER_INK[e.player.id], 0.8);
+      this.juice.splat(e.ball.x, e.ball.bottom, playerColor(e.player.id).hex, 'small');
+      if (e.dashPass && this.joined.size > 1) {
+        this.juice.stamp('PASS', e.player.x, e.player.top - 46, playerColor(e.player.id).baseInk, 0.8);
+      }
     });
-    this.world.on('jump', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
-    this.world.on('land', (p: Player) => this.juice.splat(p.x, p.y - 4, PLAYER_INK[p.id], 'small', 1));
+    this.world.on('jump', (p: Player) => this.juice.splat(p.x, p.y - 4, playerColor(p.id).hex, 'small', 1));
+    this.world.on('land', (p: Player) => this.juice.splat(p.x, p.y - 4, playerColor(p.id).hex, 'small', 1));
     this.world.on('dash', (p: Player) => {
       AudioManager.play('dash');
-      this.juice.splat(p.x, p.y - 16, PLAYER_INK[p.id], 'small', 1);
+      this.juice.splat(p.x, p.y - 16, playerColor(p.id).hex, 'small', 1);
     });
     this.world.on('bump', (e: BumpEvent) => {
       AudioManager.play(e.kind === 'trampoline' ? 'trampoline' : 'bump');
-      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'hit', 2);
+      this.juice.splat(e.x, e.y, playerColor(e.ink).hex, 'hit', 2);
     });
     this.world.on('ballCollide', (e: BumpEvent) => {
       AudioManager.play('clack');
-      this.juice.splat(e.x, e.y, PLAYER_INK[e.ink], 'small', 2);
+      this.juice.splat(e.x, e.y, playerColor(e.ink).hex, 'small', 2);
     });
     this.world.on('floor', (ball: Ball) => {
       this.juice.popup(ball.x, T.floorY - 30, 'oops! (practice)', 'black', 16);
@@ -134,6 +140,7 @@ export class LobbyScene extends Phaser.Scene {
     for (const p of PLAYERS) {
       const card = this.cards[p.id];
       card.ticket.setTexture(RISO_KEYS.ticket(p.id));
+      card.charText.setText(charSelectPrompt(p.id, this.joined.has(p.id)));
       const padText = padLabel(p.gamepadIndex, this.inputMgr.padConnected(p.gamepadIndex));
       card.lastPad = padText;
       card.pad.setText(padText);
@@ -144,11 +151,20 @@ export class LobbyScene extends Phaser.Scene {
   private cycleCharacter(id: PlayerId, delta: 1 | -1): void {
     cyclePlayerCharStyle(id, delta);
     refreshCharacterTextures(this, id);
-    this.cards[id].ticket.setTexture(RISO_KEYS.ticket(id));
+    this.world.refreshPlayerArt(id);
+    const col = playerColor(id);
+    const readable = playerReadableCss(id);
+    const card = this.cards[id];
+    card.ticket.setTexture(RISO_KEYS.ticket(id));
+    card.charText.setText(charSelectPrompt(id, this.joined.has(id))).setColor(readable);
+    card.status.setColor(readable);
+    card.slam.image.setTint(stampTint(col.baseInk));
+    card.slammedAt = this.now;
+    card.lastScale = NaN;
+    this.juice.splat(ticketX(id) + 92, LOBBY.tickets.y + 54, col.hex, 'small', 1);
     const live = this.world.playerById(id);
     if (live) {
-      live.view.refreshStyle();
-      this.juice.splat(live.x, live.y - 18, PLAYER_INK[id], 'small', 1);
+      this.juice.splat(live.x, live.y - 18, col.hex, 'small', 1);
     }
     AudioManager.play('select');
   }
@@ -188,9 +204,11 @@ export class LobbyScene extends Phaser.Scene {
     const tk = LOBBY.tickets;
     for (const p of PLAYERS) {
       const x = ticketX(p.id);
+      const cx = x + (TICKET.w * tk.scale) / 2;
+      const cy = tk.y + (TICKET.h * tk.scale) / 2;
       const ticket = this.add
-        .image(x, tk.y, RISO_KEYS.ticket(p.id))
-        .setOrigin(0)
+        .image(cx, cy, RISO_KEYS.ticket(p.id))
+        .setOrigin(0.5)
         .setScale(S * tk.scale)
         .setDepth(5)
         .setInteractive({ useHandCursor: true });
@@ -199,13 +217,25 @@ export class LobbyScene extends Phaser.Scene {
         this.idle = 0;
         this.cycleCharacter(p.id, 1);
       });
-      const slam = new StampSlam(this, 'JOINED', stampTint(PLAYER_INK[p.id]), tk.stampRot, tk.stampScale);
+      const col = playerColor(p.id);
+      const readable = playerReadableCss(p.id);
+      const slam = new StampSlam(this, 'JOINED', stampTint(col.baseInk), tk.stampRot, tk.stampScale);
       slam.image.setPosition(x + tk.stampOffsetX, tk.y + tk.stampOffsetY).setDepth(7).setVisible(false);
 
-      const cx = x + (TICKET.w * tk.scale) / 2;
-      const statusColor = INK[readableInk(PLAYER_INK[p.id])];
+      const charText = this.add
+        .text(cx, tk.charY, charSelectPrompt(p.id, false), risoText(10, readable, 'mono'))
+        .setFontStyle('bold')
+        .setOrigin(0.5, 0)
+        .setBlendMode(MULTIPLY)
+        .setDepth(6)
+        .setInteractive({ useHandCursor: true });
+      charText.on('pointerdown', () => {
+        if (this.controlsMenu.isOpen || this.roller.isExiting) return;
+        this.idle = 0;
+        this.cycleCharacter(p.id, 1);
+      });
       const status = this.add
-        .text(cx, tk.statusY, joinPrompt(p.id, false), risoText(11, statusColor, 'mono'))
+        .text(cx, tk.statusY, joinPrompt(p.id, false), risoText(11, readable, 'mono'))
         .setFontStyle('bold')
         .setOrigin(0.5, 0)
         .setBlendMode(MULTIPLY)
@@ -224,7 +254,7 @@ export class LobbyScene extends Phaser.Scene {
         this.onRebindKeys();
         AudioManager.play('join');
       });
-      this.cards.push({ ticket, slam, status, pad, lastPad: initialPad, lastVis: true });
+      this.cards.push({ ticket, slam, charText, status, pad, lastPad: initialPad, lastVis: true, slammedAt: -Infinity, lastScale: 1 });
     }
   }
 
@@ -243,6 +273,7 @@ export class LobbyScene extends Phaser.Scene {
     this.world.addPlayer(id);
     AudioManager.play('join');
     const card = this.cards[id];
+    card.charText.setText(charSelectPrompt(id, true));
     card.status.setText(joinPrompt(id, true));
     if (!card.lastVis) {
       card.lastVis = true;
@@ -283,6 +314,12 @@ export class LobbyScene extends Phaser.Scene {
       if (this.inputMgr.padCharPressed(p.id)) this.cycleCharacter(p.id, 1);
       if (this.inputMgr.get(p.id).jumpPressed) this.join(p.id);
       const card = this.cards[p.id];
+      const ks = slamScale(time - card.slammedAt);
+      if (ks !== card.lastScale) {
+        card.lastScale = ks;
+        card.ticket.setScale(S * LOBBY.tickets.scale * ks);
+        card.charText.setScale(ks);
+      }
       const padText = padLabel(p.gamepadIndex, this.inputMgr.padConnected(p.gamepadIndex));
       if (padText !== card.lastPad) {
         card.lastPad = padText;

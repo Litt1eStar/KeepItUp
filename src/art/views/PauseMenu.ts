@@ -7,11 +7,10 @@ import {
 } from '../../config/players';
 import type { InputManager } from '../../input/InputManager';
 import { AudioManager } from '../../systems/AudioManager';
-import { INK, INK_HEX, PLAYER_INK } from '../palette';
+import { INK, INK_HEX, playerReadableCss } from '../palette';
 import { risoText } from '../type';
 import { RISO_KEYS, ensurePauseTextures } from '../textures';
 import { slamScale } from '../motion';
-import { readableInk } from '../hud';
 import { CHAR_NAMES } from '../ui';
 import {
   PAUSE_ITEMS, PAUSE_LAYOUT, padSlotLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
@@ -230,7 +229,7 @@ export class PauseMenu {
     const L = PAUSE_LAYOUT;
     for (const p of PLAYERS) {
       const x = pauseCtrlColX(p.id);
-      const color = INK[readableInk(PLAYER_INK[p.id])];
+      const color = playerReadableCss(p.id);
       const hdr = scene.add
         .text(x, L.ctrlHeaderY, `${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`, risoText(11, color, 'mono'))
         .setFontStyle('bold')
@@ -349,7 +348,7 @@ export class PauseMenu {
 
   private refreshControlLabels(): void {
     for (const p of PLAYERS) {
-      this.ctrlHeaders[p.id]?.setText(`${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`);
+      this.ctrlHeaders[p.id]?.setText(`${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`).setColor(playerReadableCss(p.id));
       CONTROL_ACTIONS.forEach((act, row) => {
         this.cells[row][p.id].text.setText(formatKeyName(p.keys[act]));
       });
@@ -361,7 +360,7 @@ export class PauseMenu {
     this.lastCtrlScale = NaN;
     this.lastBlinkVis = true;
     for (const p of PLAYERS) {
-      this.ctrlHeaders[p.id]?.setText(`${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`);
+      this.ctrlHeaders[p.id]?.setText(`${p.name} ${CHAR_NAMES[p.id]} ${p.glyph}`).setColor(playerReadableCss(p.id));
       const col = p.id;
       for (let row = 0; row <= CTRL_PAD_ROW; row++) {
         const cell = this.cells[row][col];

@@ -13,7 +13,7 @@
  */
 import { PLAYERS, type CharStyleId, type PlayerId } from '../config/players';
 import { TUNING as T } from '../config/tuning';
-import { INK, INK_ANGLE, PLAYER_INK } from './palette';
+import { INK, INK_ANGLE, styleColor } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { SHADOW_STEPS, shadowStep } from './shadow';
 import { handLine, inkLayer, knockOut, strokeWobbly, traceShape, type Pt } from './draw';
@@ -183,8 +183,8 @@ export function eyeOutline(id: PlayerId, i: number): { pts: Pt[]; smooth: boolea
   return eyeOutlineForStyle(PLAYERS[id].charStyle, i);
 }
 
-function traceEye(ctx: Ctx, id: PlayerId, i: number, cx: number, cy: number, seed = 0, amp = 0): void {
-  const { pts, smooth } = eyeOutline(id, i);
+function traceEye(ctx: Ctx, style: CharStyleId, i: number, cx: number, cy: number, seed = 0, amp = 0): void {
+  const { pts, smooth } = eyeOutlineForStyle(style, i);
   const moved: Pt[] = pts.map(([x, y]) => [cx + x, cy + y]);
   const p = amp > 0 ? wobblePoints(moved, seed, amp) : moved;
   if (smooth) { tracePath(ctx, p); return; }
@@ -196,8 +196,9 @@ function traceEye(ctx: Ctx, id: PlayerId, i: number, cx: number, cy: number, see
 const stickerAt = (cx: number, cy: number) => ({ x: cx - 0.6 * CHAR_R, y: cy + 0.2 * CHAR_R, size: 5.5 * K });
 
 /** Fill layer: body ink with crescent shading, eye whites and back sticker knocked out (paper shows). */
-export function drawCharacterFill(ctx: Ctx, id: PlayerId, cx: number, cy: number, seed = 1): void {
-  const ink = INK[PLAYER_INK[id]];
+export function drawCharacterFill(ctx: Ctx, id: PlayerId, cx: number, cy: number, seed = 1, styleOverride?: CharStyleId): void {
+  const style = styleOverride ?? PLAYERS[id].charStyle;
+  const ink = styleColor(style).css;
   const bodyPts = wobblePoints(circlePoints(cx, cy, BODY_R, 36), 900 + id, 0.4 * K);
   ctx.save();
   tracePath(ctx, bodyPts);
@@ -213,7 +214,7 @@ export function drawCharacterFill(ctx: Ctx, id: PlayerId, cx: number, cy: number
   fillHalftone(ctx, cx - CHAR_R, cy - CHAR_R, CHAR_R * 2, CHAR_R * 2, INK.black, 0.26, 2.6 * K, INK_ANGLE.black, { jitterSeed: 910 + id });
   ctx.restore();
   // knockouts
-  for (let i = 0; i < EYE_LAYOUT[id].eyes.length; i++) knockOut(ctx, () => traceEye(ctx, id, i, cx, cy));
+  for (let i = 0; i < STYLE_EYE_LAYOUT[style].eyes.length; i++) knockOut(ctx, () => traceEye(ctx, style, i, cx, cy));
   const st = stickerAt(cx, cy);
   knockOut(ctx, () => traceShape(ctx, PLAYERS[id].shape, st.x, st.y, st.size));
   // uneven ink + a few spatters around the rim
@@ -228,7 +229,8 @@ export function drawCharacterFill(ctx: Ctx, id: PlayerId, cx: number, cy: number
 }
 
 /** Line layer: outline, face (no pupils) and sticker outline. `v` picks the boil variant. */
-export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number, v: number): void {
+export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number, v: number, styleOverride?: CharStyleId): void {
+  const style = styleOverride ?? PLAYERS[id].charStyle;
   const B = INK.black;
   const s = 100 + id * 10 + v; // seed per character × variant
   // outline: wobbly, but the bottom 3 points are pinned at max extent so the feet touch the floor
@@ -237,9 +239,9 @@ export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number
   for (const k of [9, 10, 11]) ring[k] = low[k];
   strokeWobbly(ctx, ring, 0, 0, OUTLINE_W, B);
   // eyes
-  for (let i = 0; i < EYE_LAYOUT[id].eyes.length; i++) {
+  for (let i = 0; i < STYLE_EYE_LAYOUT[style].eyes.length; i++) {
     ctx.save();
-    traceEye(ctx, id, i, cx, cy, s * 3 + i, 0.2 * K);
+    traceEye(ctx, style, i, cx, cy, s * 3 + i, 0.2 * K);
     ctx.lineWidth = EYE_LINE_W;
     ctx.lineJoin = 'round';
     ctx.strokeStyle = B;
@@ -247,7 +249,6 @@ export function drawCharacterLine(ctx: Ctx, id: PlayerId, cx: number, cy: number
     ctx.restore();
   }
   const at = (pts: Pt[]): Pt[] => pts.map(([x, y]) => [cx + x * K, cy + y * K]);
-  const style = PLAYERS[id].charStyle;
   if (style === 0) {
     // PIK: sharp brows slanting toward the center + wide filled grin with a dimple
     handLine(ctx, at([[-2, -12.5], [2, -11.5], [6.5, -10]]), s + 1, 1.8 * K, B, 0.25);
@@ -355,12 +356,13 @@ export function drawSpeedlines(ctx: Ctx, seed = 5): void {
  * misregistration, then line variant `v`, then pupils glancing forward.
  * Draws at the ctx's current transform; body center at (cx,cy).
  */
-export function drawCharacter(ctx: Ctx, id: PlayerId, cx: number, cy: number, v = 0): void {
+export function drawCharacter(ctx: Ctx, id: PlayerId, cx: number, cy: number, v = 0, styleOverride?: CharStyleId): void {
+  const style = styleOverride ?? PLAYERS[id].charStyle;
   const span = CHAR_R + CHAR_PAD;
-  inkLayer(ctx, cx - span, cy - span, span * 2, span * 2, (c) => drawCharacterFill(c, id, cx, cy), charMisreg(id));
-  drawCharacterLine(ctx, id, cx, cy, v);
-  for (let i = 0; i < EYE_LAYOUT[id].eyes.length; i++) {
-    const p = pupilPos(id, i, 1, 0, 1);
-    drawPupil(ctx, cx + p.x, cy + CHAR_R + p.y, EYE_LAYOUT[id].pupilRadius);
+  inkLayer(ctx, cx - span, cy - span, span * 2, span * 2, (c) => drawCharacterFill(c, id, cx, cy, 1, style), charMisreg(id));
+  drawCharacterLine(ctx, id, cx, cy, v, style);
+  for (let i = 0; i < STYLE_EYE_LAYOUT[style].eyes.length; i++) {
+    const p = pupilPosForStyle(style, i, 1, 0, 1);
+    drawPupil(ctx, cx + p.x, cy + CHAR_R + p.y, STYLE_EYE_LAYOUT[style].pupilRadius);
   }
 }
