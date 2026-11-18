@@ -10,7 +10,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { leaderboard } from '../services/Leaderboard';
 import { INK, INK_HEX, PAPER, PLAYER_INK } from '../art/palette';
 import { risoText } from '../art/type';
-import { RISO_KEYS, renderLobbyReceipt } from '../art/textures';
+import { RISO_KEYS, refreshTicketTextures, renderLobbyReceipt } from '../art/textures';
 import { TICKET, stampTint } from '../art/ui';
 import { demoStripVisible, readableInk } from '../art/hud';
 import { StampSlam } from '../art/views/StampSlam';
@@ -62,6 +62,7 @@ export class LobbyScene extends Phaser.Scene {
     this.juice = new Juice(this);
 
     this.buildCoverHeader();
+    refreshTicketTextures(this);
     this.buildTickets();
     this.buildBoard();
 

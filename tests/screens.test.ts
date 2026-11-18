@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
-  GAME_OVER, LOBBY, PROMPT_BLINK_ON, PROMPT_BLINK_PERIOD, REPORT_LINE_STEP_MS, ROLLER_STEP_MS, ROLLER_STEPS,
-  boardCountdownLabel, entryCountdownLabel, formatDotRow, joinPrompt, padLabel, promptBlinkVisible,
+  GAME_OVER, LOBBY, PAUSE_ITEMS, PAUSE_LAYOUT, PROMPT_BLINK_ON, PROMPT_BLINK_PERIOD, REPORT_LINE_STEP_MS, ROLLER_STEP_MS, ROLLER_STEPS,
+  boardCountdownLabel, entryCountdownLabel, formatDotRow, joinPrompt, padLabel, pauseCtrlColX, pauseCtrlRowY, pauseItemY, promptBlinkVisible,
   reportLinesVisible, rollerCoverWidth, slotRotation, slotX, teamLabel, ticketX,
 } from '../src/art/screens';
 import { STEP_MS } from '../src/art/motion';
 import { LETTER_BOX, RECEIPT, TICKET } from '../src/art/ui';
 import { TUNING as T } from '../src/config/tuning';
-import type { PlayerId } from '../src/config/players';
+import {
+  DEFAULT_KEYS, PLAYERS, eventToKeyName, formatKeyName, formatTicketControls, resetPlayerKeys, setPlayerKey, type PlayerId,
+} from '../src/config/players';
 
 describe('lobby helpers & layout', () => {
   it('places 3 tickets left-to-right clear of the receipt and floor', () => {
@@ -112,5 +114,64 @@ describe('print-roller transition', () => {
     expect(seen[0]).toBe(T.width);
     expect(seen[ROLLER_STEPS]).toBe(0);
     for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeLessThan(seen[i - 1]);
+  });
+});
+
+describe('pause menu & key rebinding', () => {
+  it('exposes the 3 pause options and fits inside stage bounds', () => {
+    expect([...PAUSE_ITEMS]).toEqual(['RESUME', 'CONTROL', 'BACK TO LOBBY']);
+    const c = PAUSE_LAYOUT.card;
+    expect(c.x).toBeGreaterThan(0);
+    expect(c.x + c.w).toBeLessThan(T.width);
+    expect(c.y).toBeGreaterThan(0);
+    expect(c.y + c.h).toBeLessThan(T.floorY);
+
+    for (let i = 0; i < PAUSE_ITEMS.length; i++) {
+      expect(pauseItemY(i)).toBeGreaterThan(PAUSE_LAYOUT.titleY + PAUSE_LAYOUT.titleSize);
+      expect(pauseItemY(i)).toBeLessThan(PAUSE_LAYOUT.hintY);
+    }
+    for (const id of [0, 1, 2] as PlayerId[]) {
+      expect(pauseCtrlColX(id)).toBeGreaterThan(PAUSE_LAYOUT.ctrlRowLabelX);
+      expect(pauseCtrlColX(id)).toBeLessThan(c.x + c.w);
+    }
+    for (let r = 0; r < 4; r++) {
+      expect(pauseCtrlRowY(r)).toBeGreaterThan(PAUSE_LAYOUT.ctrlHeaderY);
+      expect(pauseCtrlRowY(r)).toBeLessThan(PAUSE_LAYOUT.ctrlBtnY);
+    }
+  });
+
+  it('formats key names, ticket controls and maps DOM key events', () => {
+    expect(formatKeyName('LEFT')).toBe('←');
+    expect(formatKeyName('SPACE')).toBe('SPC');
+    expect(formatKeyName('FORWARD_SLASH')).toBe('/');
+    expect(formatTicketControls(DEFAULT_KEYS[0])).toBe('A/D · W jump · S dash');
+    expect(formatTicketControls(DEFAULT_KEYS[1])).toBe('←/→ · ↑ jump · ↓ dash');
+    expect(formatTicketControls(DEFAULT_KEYS[2])).toBe('J/L · I jump · K dash');
+
+    expect(eventToKeyName({ code: 'KeyQ', key: 'q' })).toBe('Q');
+    expect(eventToKeyName({ code: 'ArrowUp', key: 'ArrowUp' })).toBe('UP');
+    expect(eventToKeyName({ code: 'Digit5', key: '5' })).toBe('FIVE');
+    expect(eventToKeyName({ code: 'Slash', key: '/' })).toBe('FORWARD_SLASH');
+    expect(eventToKeyName({ code: 'Escape', key: 'Escape' })).toBeNull();
+    expect(eventToKeyName({ code: 'Enter', key: 'Enter' })).toBeNull();
+    expect(eventToKeyName({ code: 'F11', key: 'F11' })).toBeNull();
+  });
+
+  it('rebinds player keys, swaps conflicting bindings, updates joinPrompt and resets', () => {
+    try {
+      setPlayerKey(0, 'jump', 'Q', false);
+      expect(PLAYERS[0].keys.jump).toBe('Q');
+      expect(joinPrompt(0, false)).toBe('PRESS Q TO JOIN');
+
+      // Assigning P2's UP key to P1 jump swaps Q into P2 jump (no duplicates)
+      setPlayerKey(0, 'jump', 'UP', false);
+      expect(PLAYERS[0].keys.jump).toBe('UP');
+      expect(PLAYERS[1].keys.jump).toBe('Q');
+    } finally {
+      resetPlayerKeys(false);
+    }
+    expect(PLAYERS[0].keys).toEqual(DEFAULT_KEYS[0]);
+    expect(PLAYERS[1].keys).toEqual(DEFAULT_KEYS[1]);
+    expect(PLAYERS[2].keys).toEqual(DEFAULT_KEYS[2]);
   });
 });

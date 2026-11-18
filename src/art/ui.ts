@@ -3,7 +3,7 @@
  * player ticket stubs, the high-score receipt and the next-ball dots. Splats live in splat.ts.
  * No Phaser import; all sizes logical.
  */
-import { PLAYERS, type PlayerId } from '../config/players';
+import { PLAYERS, formatTicketControls, type PlayerId } from '../config/players';
 import { INK, INK_ANGLE, INK_HEX, PLAYER_INK, type InkName } from './palette';
 import { circlePoints, fillHalftone, misregOffset, mottle, paperGrain, seeded, speckle, tracePath, wobblePoints } from './riso';
 import { DISPLAY_FONT, MONO_FONT } from './type';
@@ -75,11 +75,6 @@ export function drawStamp(ctx: Ctx, id: StampId, w: number, h: number): void {
 // ---------------------------------------------------------------- ticket
 
 export const TICKET = { w: 190, h: 116, perfX: 56, notchR: 6 } as const;
-const CONTROLS: Record<PlayerId, string> = {
-  0: 'A/D · W jump · S dash',
-  1: '←/→ · ↑ jump · ↓ dash',
-  2: 'J/L · I jump · K dash',
-};
 export const CHAR_NAMES: Record<PlayerId, string> = { 0: 'PIK', 1: 'BLOOP', 2: 'BRICK' };
 
 function rectPts(x: number, y: number, w: number, h: number): Pt[] {
@@ -156,7 +151,7 @@ function drawTicketBody(ctx: Ctx, id: PlayerId): void {
   ctx.fillText(CHAR_NAMES[id], 126, 66);
   handLine(ctx, densify([[px + 8, 84], [w - 9, 84]], 6), 130 + id, 0.8, B);
   font(ctx, 8, MONO_FONT);
-  ctx.fillText(CONTROLS[id], px + 8, 99);
+  ctx.fillText(formatTicketControls(PLAYERS[id].keys), px + 8, 99);
   font(ctx, 5.5, MONO_FONT);
   ctx.fillText('VALID FOR ONE GAME · NO REFUNDS', px + 8, 108);
   // perforation: punched notches (transparent) + dashed tear line
@@ -184,6 +179,7 @@ export const RECEIPT = { w: 260, h: 220, tooth: 8, depth: 5 } as const;
 export const REPORT_CARD = { w: 396, h: 436, tooth: 8, depth: 5 } as const;
 export const BOARD_CARD = { w: 452, h: 436, tooth: 8, depth: 5 } as const;
 export const LETTER_BOX = { w: 46, h: 58 } as const;
+export const PAUSE_CARD = { w: 540, h: 380, tooth: 8, depth: 5 } as const;
 
 export interface ReceiptRowData {
   team: string;
@@ -386,6 +382,25 @@ export function drawLetterBox(ctx: Ctx): void {
   ctx.restore();
   mottle(ctx, w, h, 260, 0.35);
   speckle(ctx, w, h, '#fff', 261, 6);
+}
+
+/** Riso pause menu card (PAUSE_CARD.w × PAUSE_CARD.h) with torn top/bottom edges, side rules and pink header band. */
+export function drawPauseCard(ctx: Ctx): void {
+  const { w, h, tooth, depth } = PAUSE_CARD;
+  ctx.save();
+  zigzagReceiptPath(ctx, w, h, tooth, depth);
+  ctx.clip();
+  paperGrain(ctx, w, h, 310);
+  drawPinkBand(ctx, w, h, 24, 28, w - 48, 36, 0.16, 311);
+  inkLayer(ctx, 0, 0, w, h, (c) => {
+    handLine(c, densify([[6, tooth + 2], [6, h - tooth - 2]], 10), 313, 1.8, INK.black);
+    handLine(c, densify([[w - 6, tooth + 2], [w - 6, h - tooth - 2]], 10), 314, 1.8, INK.black);
+    drawDashedRules(c, 24, w - 24, [72, 330]);
+    c.fillStyle = INK.black;
+    drawBarcode(c, w / 2 - 58, w / 2 + 58, 354, 12, 315);
+    mottle(c, w, h, 312, 0.2);
+  });
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------- next-ball dots

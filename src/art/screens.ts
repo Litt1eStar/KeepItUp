@@ -2,10 +2,10 @@
  * Pure layout, formatting and stepped timing for the Lobby, Game Over and PrintRoller screens.
  * Phaser-free so every coordinate and schedule is unit-tested in node.
  */
-import { PLAYERS, type PlayerId } from '../config/players';
+import { PLAYERS, formatKeyName, type PlayerId } from '../config/players';
 import { TUNING as T } from '../config/tuning';
 import { MOTION_STEP_MS, STEP_MS } from './motion';
-import { BOARD_CARD, CHAR_NAMES, REPORT_CARD, TICKET } from './ui';
+import { BOARD_CARD, CHAR_NAMES, PAUSE_CARD, REPORT_CARD, TICKET } from './ui';
 
 export { CHAR_NAMES };
 
@@ -19,12 +19,6 @@ export const LOBBY = {
   startHint: { x: 444, y: (T.floorY + T.height) / 2 + 2, size: 12, text: 'SPACE / START TO PLAY · SOLO IF 1P · F FULLSCREEN' },
 } as const;
 
-const JOIN_PROMPTS: Record<PlayerId, string> = {
-  0: 'PRESS W TO JOIN',
-  1: 'PRESS ↑ / PAD A',
-  2: 'PRESS I / PAD A',
-};
-
 /** Left edge of player `id`'s ticket stub on the lobby zine cover. */
 export function ticketX(id: PlayerId): number {
   return LOBBY.tickets.x0 + id * (TICKET.w * LOBBY.tickets.scale + LOBBY.tickets.gap);
@@ -32,7 +26,9 @@ export function ticketX(id: PlayerId): number {
 
 /** Label printed under a player's lobby ticket stub. */
 export function joinPrompt(id: PlayerId, joined: boolean): string {
-  return joined ? 'READY · BOUNCE!' : JOIN_PROMPTS[id];
+  if (joined) return 'READY · BOUNCE!';
+  const jump = formatKeyName(PLAYERS[id].keys.jump);
+  return PLAYERS[id].gamepadIndex === null ? `PRESS ${jump} TO JOIN` : `PRESS ${jump} / PAD A`;
 }
 
 /** Gamepad status label printed below the join prompt. */
@@ -116,4 +112,43 @@ export function rollerCoverWidth(elapsedMs: number, totalW: number = T.width): n
   const step = Math.floor(elapsedMs / ROLLER_STEP_MS);
   if (step >= ROLLER_STEPS) return 0;
   return Math.round((totalW * (ROLLER_STEPS - step)) / ROLLER_STEPS);
+}
+
+// ---------------------------------------------------------------- pause menu
+
+export const PAUSE_ITEMS = ['RESUME', 'CONTROL', 'BACK TO LOBBY'] as const;
+export type PauseItem = (typeof PAUSE_ITEMS)[number];
+
+export const PAUSE_LAYOUT = {
+  card: { x: (T.width - PAUSE_CARD.w) / 2, y: 64, w: PAUSE_CARD.w, h: PAUSE_CARD.h },
+  tagY: 82,
+  titleY: 96,
+  titleSize: 36,
+  mainItemY0: 188,
+  mainItemStep: 54,
+  mainItemSize: 32,
+  mainArrowX: 332,
+  ctrlHeaderY: 150,
+  ctrlColX0: 368,
+  ctrlColStep: 118,
+  ctrlRowLabelX: 242,
+  ctrlRowY0: 182,
+  ctrlRowStep: 36,
+  ctrlBtnY: 344,
+  ctrlResetX: 376,
+  ctrlBackX: 596,
+  hintY: 406,
+  hintSize: 10,
+} as const;
+
+export function pauseItemY(i: number): number {
+  return PAUSE_LAYOUT.mainItemY0 + i * PAUSE_LAYOUT.mainItemStep;
+}
+
+export function pauseCtrlColX(id: PlayerId): number {
+  return PAUSE_LAYOUT.ctrlColX0 + id * PAUSE_LAYOUT.ctrlColStep;
+}
+
+export function pauseCtrlRowY(row: number): number {
+  return PAUSE_LAYOUT.ctrlRowY0 + row * PAUSE_LAYOUT.ctrlRowStep;
 }

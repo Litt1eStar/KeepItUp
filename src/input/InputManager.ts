@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PLAYERS, type PlayerId } from '../config/players';
+import { CONTROL_ACTIONS, PLAYERS, type PlayerId } from '../config/players';
 
 /** One frame of intent for a player, regardless of whether it came from keys, a pad or a bot. */
 export interface PlayerInput {
@@ -32,6 +32,8 @@ export class InputManager implements InputSource {
   private keys: KeySet[] = [];
   private startKeys: Phaser.Input.Keyboard.Key[] = [];
   private fullscreenKey: Phaser.Input.Keyboard.Key;
+  private latchHandlers = new Map<Phaser.Input.Keyboard.Key, () => void>();
+  private latched = new Set<Phaser.Input.Keyboard.Key>();
   private prevJump = [false, false, false];
   private prevDash = [false, false, false];
   private prevStart = false;
@@ -40,31 +42,66 @@ export class InputManager implements InputSource {
   private startPressedNow = false;
   private anyPressedNow = false;
 
+  private readonly onFullscreen = (): void => {
+    if (!this.isKeyBound('F')) this.scene.scale.toggleFullscreen();
+  };
+
   constructor(private readonly scene: Phaser.Scene) {
     const kb = scene.input.keyboard!;
+    this.startKeys = [kb.addKey('SPACE'), kb.addKey('ENTER')];
+    this.fullscreenKey = kb.addKey('F');
+    this.fullscreenKey.on('down', this.onFullscreen);
+    this.rebind();
+
+    // Phaser reuses Key objects when a scene restarts, so drop our listeners on shutdown
+    // (otherwise e.g. the fullscreen toggle would fire twice and cancel itself out).
+    scene.events.once('shutdown', () => {
+      this.clearKeyHandlers();
+      this.fullscreenKey.off('down', this.onFullscreen);
+    });
+  }
+
+  /** Rebuild player Key bindings from `PLAYERS` (call after rebinding keys in pause menu). */
+  rebind(): void {
+    const kb = this.scene.input.keyboard!;
+    this.clearKeyHandlers();
+    this.latched.clear();
     this.keys = PLAYERS.map((p) => ({
       left: kb.addKey(p.keys.left),
       right: kb.addKey(p.keys.right),
       jump: kb.addKey(p.keys.jump),
       dash: kb.addKey(p.keys.dash),
     }));
-    this.startKeys = [kb.addKey('SPACE'), kb.addKey('ENTER')];
-    this.fullscreenKey = kb.addKey('F');
-    this.fullscreenKey.on('down', () => scene.scale.toggleFullscreen());
-
     // Latch presses from the DOM keydown event. Phaser's JustDown is cleared on keyup, so a
     // tap released before the next frame would otherwise be lost.
-    const all = [...this.keys.flatMap((k) => [k.jump, k.dash]), ...this.startKeys];
-    for (const key of all) key.on('down', () => this.latched.add(key));
-
-    // Phaser reuses Key objects when a scene restarts, so drop our listeners on shutdown
-    // (otherwise e.g. the fullscreen toggle would fire twice and cancel itself out).
-    scene.events.once('shutdown', () => {
-      for (const key of [...all, this.fullscreenKey]) key.removeAllListeners();
-    });
+    for (const key of [...this.keys.flatMap((k) => [k.jump, k.dash]), ...this.startKeys]) {
+      this.bindLatch(key);
+    }
   }
 
-  private latched = new Set<Phaser.Input.Keyboard.Key>();
+  /** Drop any buffered key presses (e.g. when returning from the pause menu). */
+  clearLatched(): void {
+    this.latched.clear();
+    this.startPressedNow = false;
+    this.anyPressedNow = false;
+    this.current = [EMPTY_INPUT, EMPTY_INPUT, EMPTY_INPUT];
+  }
+
+  private bindLatch(key: Phaser.Input.Keyboard.Key): void {
+    if (this.latchHandlers.has(key)) return;
+    const handler = () => this.latched.add(key);
+    key.on('down', handler);
+    this.latchHandlers.set(key, handler);
+  }
+
+  private clearKeyHandlers(): void {
+    for (const [key, handler] of this.latchHandlers) key.off('down', handler);
+    this.latchHandlers.clear();
+  }
+
+  private isKeyBound(name: string): boolean {
+    return PLAYERS.some((p) => CONTROL_ACTIONS.some((act) => p.keys[act] === name));
+  }
 
   /** True if the key was pressed since the last update() (even if already released). */
   private consume(key: Phaser.Input.Keyboard.Key): boolean {

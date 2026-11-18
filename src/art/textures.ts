@@ -15,8 +15,8 @@ import { ballArt, drawBallFill, drawBallLine, drawShadow, shadowTexSize } from '
 import { drawStage } from './stage';
 import { SHADOW_STEPS } from './shadow';
 import {
-  BOARD_CARD, DOT_TEX, LETTER_BOX, RECEIPT, REPORT_CARD, STAMP_IDS, TICKET,
-  drawBoardReceipt, drawDot, drawLetterBox, drawReceipt, drawReportCard, drawStamp, drawTicket, stampSize,
+  BOARD_CARD, DOT_TEX, LETTER_BOX, PAUSE_CARD, RECEIPT, REPORT_CARD, STAMP_IDS, TICKET,
+  drawBoardReceipt, drawDot, drawLetterBox, drawPauseCard, drawReceipt, drawReportCard, drawStamp, drawTicket, stampSize,
   type ReceiptRowData, type StampId,
 } from './ui';
 import { SPLAT_SIZE, drawSplat, drawSplatLine } from './splat';
@@ -53,6 +53,7 @@ export const RISO_KEYS = {
   reportCard: 'riso:reportCard',
   gameOverReceipt: 'riso:gameOverReceipt',
   letterBox: 'riso:letterBox',
+  pauseCard: 'riso:pauseCard',
   dot: 'riso:dot',
   dotEmpty: 'riso:dotEmpty',
 } as const;
@@ -139,6 +140,7 @@ export function generateRisoTextures(scene: Phaser.Scene): void {
   tex(K.receipt, RECEIPT.w, RECEIPT.h, (c) => drawReceipt(c));
   tex(K.reportCard, REPORT_CARD.w, REPORT_CARD.h, drawReportCard);
   tex(K.letterBox, LETTER_BOX.w, LETTER_BOX.h, drawLetterBox);
+  tex(K.pauseCard, PAUSE_CARD.w, PAUSE_CARD.h, drawPauseCard);
   tex(K.dot, DOT_TEX, DOT_TEX, (c) => drawDot(c, true));
   tex(K.dotEmpty, DOT_TEX, DOT_TEX, (c) => drawDot(c, false));
 }
@@ -150,6 +152,21 @@ export function ensureReportTextures(scene: Phaser.Scene): void {
   }
   if (!scene.textures.exists(RISO_KEYS.letterBox)) {
     canvasTexture(scene, RISO_KEYS.letterBox, LETTER_BOX.w, LETTER_BOX.h, drawLetterBox);
+  }
+}
+
+/** Ensure Pause menu card/frame textures exist on `scene`. */
+export function ensurePauseTextures(scene: Phaser.Scene): void {
+  ensureReportTextures(scene);
+  if (!scene.textures.exists(RISO_KEYS.pauseCard)) {
+    canvasTexture(scene, RISO_KEYS.pauseCard, PAUSE_CARD.w, PAUSE_CARD.h, drawPauseCard);
+  }
+}
+
+/** Regenerate the 3 lobby ticket textures so updated key bindings show immediately. */
+export function refreshTicketTextures(scene: Phaser.Scene): void {
+  for (const p of PLAYERS) {
+    canvasTexture(scene, RISO_KEYS.ticket(p.id), TICKET.w, TICKET.h, (c) => drawTicket(c, p.id));
   }
 }
 

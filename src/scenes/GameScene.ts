@@ -13,10 +13,11 @@ import { leaderboard } from '../services/Leaderboard';
 import type { Ball } from '../entities/Ball';
 import { INK, PAPER, PLAYER_INK } from '../art/palette';
 import { risoText } from '../art/type';
-import { RISO_KEYS } from '../art/textures';
+import { RISO_KEYS, refreshTicketTextures } from '../art/textures';
 import { formatScore } from '../art/ui';
 import { HUD, bestLabel, demoStripVisible, dotX, dotsFilled, formatClock, isComboMilestone, localStampFor, niceDue } from '../art/hud';
 import { ComboLabel } from '../art/views/ComboLabel';
+import { PauseMenu } from '../art/views/PauseMenu';
 
 export interface GameData {
   mode: 'play' | 'attract';
@@ -39,6 +40,7 @@ export class GameScene extends Phaser.Scene {
   private bot: BotInput | null = null;
   private world!: World;
   private juice!: Juice;
+  private pauseMenu: PauseMenu | null = null;
 
   private score = 0;
   private elapsed = 0;
@@ -79,6 +81,7 @@ export class GameScene extends Phaser.Scene {
     this.timeScale = 1;
     this.over = false;
     this.bot = null;
+    this.pauseMenu = null;
     this.now = 0;
     this.shown = { score: -1, secs: -1, best: -1, dots: -1, demo: true };
   }
@@ -105,6 +108,17 @@ export class GameScene extends Phaser.Scene {
 
     this.buildHud();
     this.wireEvents();
+    if (!this.attract) {
+      this.pauseMenu = new PauseMenu(this, {
+        onResume: () => this.inputMgr.clearLatched(),
+        onLobby: () => this.scene.start('Lobby'),
+        onRebind: () => {
+          this.inputMgr.rebind();
+          refreshTicketTextures(this);
+        },
+        canPause: () => !this.over,
+      });
+    }
     leaderboard.best().then((b) => {
       this.best = b;
     });
@@ -182,6 +196,7 @@ export class GameScene extends Phaser.Scene {
   private onDrop(ball: Ball): void {
     if (this.over) return;
     this.over = true;
+    this.pauseMenu?.hide();
     this.timeScale = T.slowMoScale;
     AudioManager.play('gameover');
     // Big pink ink splat on the floor line under the dropped ball + DROPPED stamp. No flash; one tiny
@@ -208,6 +223,8 @@ export class GameScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     this.now = time;
+    this.pauseMenu?.tick(time);
+    if (this.pauseMenu?.isOpen) return;
     this.juice.update(time);
     this.inputMgr.update();
     if (this.attract) {
