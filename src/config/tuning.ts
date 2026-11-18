@@ -90,8 +90,6 @@ export const TUNING = {
 
   // Juice (new)
   hitStopMs: 40,
-  shakeWrongMs: 120,
-  shakeWrongIntensity: 0.006,
   slowMoScale: 0.25,
   slowMoMs: 900,
 

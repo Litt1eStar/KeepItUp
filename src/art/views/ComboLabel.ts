@@ -5,7 +5,7 @@ import { slamScale } from '../motion';
 import { HUD, comboCountLabel, comboMultLabel } from '../hud';
 
 const PAD_X = 10;
-const H = 50;
+const H = HUD.combo.h;
 
 /**
  * HUD combo: a small rotated pink stamp-style label ("×2.3" in Anton over "COMBO 13" in Space Mono)

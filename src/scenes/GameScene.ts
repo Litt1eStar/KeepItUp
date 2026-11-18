@@ -15,7 +15,7 @@ import { INK, PAPER, PLAYER_INK } from '../art/palette';
 import { risoText } from '../art/type';
 import { RISO_KEYS } from '../art/textures';
 import { formatScore } from '../art/ui';
-import { HUD, bestLabel, demoStripVisible, dotX, dotsFilled, formatClock, isComboMilestone, niceDue } from '../art/hud';
+import { HUD, bestLabel, demoStripVisible, dotX, dotsFilled, formatClock, isComboMilestone, localStampFor, niceDue } from '../art/hud';
 import { ComboLabel } from '../art/views/ComboLabel';
 
 export interface GameData {
@@ -152,6 +152,7 @@ export class GameScene extends Phaser.Scene {
     this.juice.splat(e.ball.x, e.ball.bottom, ink, e.jumpHit ? 'jump' : 'hit');
     AudioManager.play(e.jumpHit ? 'jumpHit' : 'hit');
 
+    let nice = false;
     if (e.correct) {
       this.correctHits++;
       this.streak++;
@@ -164,16 +165,18 @@ export class GameScene extends Phaser.Scene {
         this.juice.banner('COMBO', { label: String(e.combo) });
         AudioManager.play('milestone');
       }
-      if (this.multiplayer && niceDue(this.streak, milestone)) this.juice.stamp('NICE', e.player.x, e.player.top - 46, ink, 0.8);
+      nice = this.multiplayer && niceDue(this.streak, milestone);
     } else {
       this.streak = 0;
       AudioManager.play('wrong');
       // Wrong hit: the hitter's ink jumps out of register (no camera shake: the whole print would move).
       e.player.jolt(this.now);
-      this.juice.stamp('WRONG', e.player.x, e.player.top - 46);
       this.juice.popup(e.ball.x, e.ball.y - 40, 'SPEED UP', 'black', 18);
     }
-    if (e.dashPass && this.multiplayer) this.juice.stamp('PASS', e.player.x, e.player.top - 46, ink, 0.8);
+    // At most one small stamp above the hitter (they'd overprint): WRONG > NICE > PASS.
+    const local = localStampFor({ correct: e.correct, nice, pass: e.dashPass && this.multiplayer });
+    if (local === 'WRONG') this.juice.stamp('WRONG', e.player.x, e.player.top - 46);
+    else if (local) this.juice.stamp(local, e.player.x, e.player.top - 46, ink, 0.8);
   }
 
   private onDrop(ball: Ball): void {

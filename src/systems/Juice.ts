@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { TUNING as T } from '../config/tuning';
 import { S } from '../config/render';
-import { INK, INK_HEX, type InkName } from '../art/palette';
+import { INK, INK_HEX, hexToCss, type InkName } from '../art/palette';
 import { risoText } from '../art/type';
 import { RISO_KEYS, BOIL_VARIANTS } from '../art/textures';
 import { slamScale } from '../art/motion';
 import { STAMP_INK, stampTint, type StampId } from '../art/ui';
 import { splatNeedsKeyline } from '../art/splat';
 import {
-  BANNER_MS, LOCAL_STAMP_MS, SPLAT_HOLD_STEPS, SPLAT_SIZE_MUL, popupRise, readableInk, splatScale, type SplatSize,
+  BANNER_MS, LOCAL_STAMP_MS, SPLAT_HOLD_STEPS, SPLAT_SIZE_MUL, popupRise, readableInk, splatScale, stampMinY, type SplatSize,
 } from '../art/hud';
 import { StampSlam } from '../art/views/StampSlam';
 import { STAGE_QUIET_Y } from '../art/stage';
@@ -32,6 +32,9 @@ interface PopupFx {
   born: number;
   y: number;
   shown: number;
+  /** Last style applied, so a recycled popup only restyles when it must (each change redraws the canvas). */
+  color: string;
+  size: number;
 }
 
 interface StampFx {
@@ -142,7 +145,16 @@ export class Juice {
     y = Math.max(POPUP_MIN_Y, y); // balls fly above the screen; keep the text on the paper, under the HUD
     p.y = y;
     p.shown = 0;
-    p.text.setText(text).setColor(INK[readableInk(ink)]).setFontSize(size).setPosition(x, y).setVisible(true);
+    const color = INK[readableInk(ink)];
+    if (color !== p.color || size !== p.size) {
+      // colour + size in a single restyle (one redraw), only when they differ from the last use
+      p.color = color;
+      p.size = size;
+      p.text.style.color = color;
+      p.text.style.fontSize = `${size}px`;
+      p.text.style.update(true);
+    }
+    p.text.setText(text).setPosition(x, y).setVisible(true);
     this.popups.push(p);
   }
 
@@ -150,7 +162,7 @@ export class Juice {
   stamp(id: StampId, x: number, y: number, ink: InkName | number = STAMP_INK[id], scale = 0.9): void {
     const rot = (this.rng() - 0.5) * 0.4;
     const slam = new StampSlam(this.scene, id, stampTint(ink), rot, scale);
-    slam.image.setPosition(Phaser.Math.Clamp(x, 70, T.width - 70), Math.max(30, y)).setDepth(DEPTH.stamp);
+    slam.image.setPosition(Phaser.Math.Clamp(x, 70, T.width - 70), Math.max(stampMinY(scale), y)).setDepth(DEPTH.stamp);
     slam.trigger(this.now);
     slam.tick(this.now);
     this.stamps.push({ slam, born: this.now, life: LOCAL_STAMP_MS, label: null, labelScale: NaN });
@@ -165,18 +177,13 @@ export class Juice {
     slam.image.setPosition(T.width / 2, BANNER_Y).setDepth(DEPTH.banner);
     let label: Phaser.GameObjects.Text | null = null;
     if (opts.label) {
-      label = this.scene.add.text(T.width / 2 + 6, BANNER_Y + 30 * scale, opts.label, risoText(56, toCss(ink)))
+      label = this.scene.add.text(T.width / 2 + 6, BANNER_Y + 30 * scale, opts.label, risoText(56, hexToCss(ink)))
         .setOrigin(0.5, 0).setRotation(0.05).setBlendMode(MULTIPLY).setDepth(DEPTH.banner);
     }
     slam.trigger(this.now);
     const b: StampFx = { slam, born: this.now, life: opts.holdMs ?? BANNER_MS, label, labelScale: NaN };
     tickStamp(b, this.now);
     this.currentBanner = b;
-  }
-
-  /** Live effect objects (for leak checks). */
-  get activeCount(): number {
-    return this.splats.length + this.popups.length + this.stamps.length + (this.currentBanner ? 1 : 0);
   }
 
   private makeSplat(): SplatFx {
@@ -188,7 +195,7 @@ export class Juice {
   private makePopup(): PopupFx {
     const text = this.scene.add.text(0, 0, '', risoText(18, INK.black, 'mono'))
       .setFontStyle('bold').setOrigin(0.5).setBlendMode(MULTIPLY).setDepth(DEPTH.popup);
-    return { text, born: 0, y: 0, shown: 0 };
+    return { text, born: 0, y: 0, shown: 0, color: INK.black, size: 18 };
   }
 }
 
@@ -212,8 +219,4 @@ function destroyStamp(st: StampFx): void {
 function removeAt<T>(arr: T[], i: number): void {
   arr[i] = arr[arr.length - 1];
   arr.pop();
-}
-
-function toCss(hex: number): string {
-  return `#${hex.toString(16).padStart(6, '0')}`;
 }

@@ -2,8 +2,8 @@
  * Riso HUD + game-feel timing and layout (pure, Phaser-free). Everything is stepped: values change
  * in whole STEP_MS ticks, never by smooth interpolation or alpha.
  */
-import { STEP_MS } from './motion';
-import { formatScore } from './ui';
+import { STEP_MS, slamScale } from './motion';
+import { DOT_TEX, STAMP_H, formatScore } from './ui';
 import type { InkName } from './palette';
 import { STAGE_QUIET_Y } from './stage';
 import { TUNING as T } from '../config/tuning';
@@ -14,7 +14,7 @@ import { TUNING as T } from '../config/tuning';
 export const HUD = {
   score: { x: 16, y: 0, size: 48 },
   /** Combo stamp-label center (rotated container). */
-  combo: { x: 300, y: 36, rot: -0.08, multSize: 24, countSize: 10 },
+  combo: { x: 300, y: 36, rot: -0.08, multSize: 24, countSize: 10, h: 50 },
   time: { x: T.width / 2, y: 2, size: 22 },
   nextCaption: { x: T.width / 2, y: 36, size: 9 },
   dots: { y: 57, spacing: 11.5, scale: 1 },
@@ -22,6 +22,11 @@ export const HUD = {
   /** Attract-mode strip, printed on the black floor band. */
   demo: { x: T.width / 2, y: (T.floorY + T.height) / 2 + 2, size: 15 },
 } as const;
+
+/** Combo label border half-height (the label's lowest point at rest is HUD.combo.y + this). */
+export const COMBO_HALF_H = HUD.combo.h / 2;
+/** Displayed next-ball dot radius (texture half-size × display scale). */
+export const DOT_R = (DOT_TEX / 2) * HUD.dots.scale;
 
 /** x of next-ball dot i (of n), centered on the stage. */
 export function dotX(i: number, n: number = T.extraBallInterval): number {
@@ -76,6 +81,21 @@ export function niceDue(streak: number, milestone: boolean): boolean {
   return streak > 0 && streak % NICE_EVERY === 0 && !milestone;
 }
 
+/**
+ * The one small stamp to slam above the hitter (they share a spot, so never more than one):
+ * WRONG > NICE > PASS, or null.
+ */
+export function localStampFor(hit: { correct: boolean; nice: boolean; pass: boolean }): 'WRONG' | 'NICE' | 'PASS' | null {
+  if (!hit.correct) return 'WRONG';
+  if (hit.nice) return 'NICE';
+  return hit.pass ? 'PASS' : null;
+}
+
+/** Highest centre y for a stamp of display scale `scale` so it stays under the HUD band, even mid-slam (×1.4). */
+export function stampMinY(scale: number): number {
+  return STAGE_QUIET_Y + (STAMP_H * scale * slamScale(0)) / 2;
+}
+
 // ---------------------------------------------------------------- stepped effect schedules
 
 export const SPLAT_HOLD_STEPS = 3;
@@ -118,6 +138,6 @@ export function demoStripVisible(tMs: number): boolean {
 
 /** True when every HUD anchor sits in the quiet band (for tests). */
 export function hudInQuietBand(): boolean {
-  const ys = [HUD.score.y + HUD.score.size, HUD.combo.y + 26, HUD.time.y + HUD.time.size, HUD.dots.y + 6, HUD.best.y + HUD.best.size];
+  const ys = [HUD.score.y + HUD.score.size, HUD.combo.y + COMBO_HALF_H, HUD.time.y + HUD.time.size, HUD.dots.y + DOT_R, HUD.best.y + HUD.best.size];
   return ys.every((y) => y < STAGE_QUIET_Y);
 }

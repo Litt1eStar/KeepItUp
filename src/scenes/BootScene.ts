@@ -3,6 +3,7 @@ import { PLAYERS, type Shape } from '../config/players';
 import { TUNING as T } from '../config/tuning';
 import { RS } from '../config/render';
 import { generateRisoTextures } from '../art/textures';
+import { hexToCss as css } from '../art/palette';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -368,10 +369,6 @@ function seeded(seed: number): () => number {
     s = (s * 1664525 + 1013904223) % 4294967296;
     return s / 4294967296;
   };
-}
-
-function css(color: number): string {
-  return `#${color.toString(16).padStart(6, '0')}`;
 }
 
 function lighten(color: number, f: number): number {

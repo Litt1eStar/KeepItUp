@@ -20,6 +20,11 @@ export const INK_HEX = {
 
 export type InkName = keyof typeof INK;
 
+/** 0xff48b0 → "#ff48b0". */
+export function hexToCss(hex: number): string {
+  return `#${hex.toString(16).padStart(6, '0')}`;
+}
+
 export const PLAYER_INK: Record<PlayerId, InkName> = {
   0: 'pink',
   1: 'blue',

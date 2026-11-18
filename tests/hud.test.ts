@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   HUD, NICE_EVERY, POPUP_MS, POPUP_RISE, POPUP_STEP_MS, SPLAT_HOLD_STEPS, bestLabel, comboCountLabel, comboMultLabel,
-  demoStripVisible, dotX, dotsFilled, formatClock, hudInQuietBand, isComboMilestone, niceDue, popupRise, readableInk, splatScale,
+  demoStripVisible, dotX, dotsFilled, formatClock, hudInQuietBand, isComboMilestone, localStampFor, niceDue, popupRise, readableInk, splatScale, stampMinY,
 } from '../src/art/hud';
+import { STAMP_H } from '../src/art/ui';
+import { STAGE_QUIET_Y } from '../src/art/stage';
+import { slamScale } from '../src/art/motion';
 import { STEP_MS } from '../src/art/motion';
 import { TUNING as T } from '../src/config/tuning';
 import { comboMultiplier } from '../src/logic/Scoring';
@@ -62,6 +65,21 @@ describe('stamp cadence', () => {
     expect(niceDue(0, false)).toBe(false);
     expect(niceDue(10, true)).toBe(false);
   });
+
+  it('fires at most one local stamp per hit: WRONG > NICE > PASS', () => {
+    expect(localStampFor({ correct: false, nice: false, pass: true })).toBe('WRONG');
+    expect(localStampFor({ correct: false, nice: true, pass: true })).toBe('WRONG');
+    expect(localStampFor({ correct: true, nice: true, pass: true })).toBe('NICE');
+    expect(localStampFor({ correct: true, nice: false, pass: true })).toBe('PASS');
+    expect(localStampFor({ correct: true, nice: false, pass: false })).toBeNull();
+  });
+
+  it('keeps local stamps under the HUD band even mid-slam', () => {
+    for (const scale of [0.8, 0.9, 1.2]) {
+      const y = stampMinY(scale);
+      expect(y - (STAMP_H * scale * slamScale(0)) / 2).toBeGreaterThanOrEqual(STAGE_QUIET_Y);
+    }
+  });
 });
 
 describe('stepped effect schedules', () => {
@@ -77,7 +95,7 @@ describe('stepped effect schedules', () => {
   it('only ever shows a handful of distinct splat scales (stepped, not smooth)', () => {
     const vals = new Set<number>();
     for (let t = 0; t < 1000; t += 3) vals.add(splatScale(t));
-    expect([...vals].sort()).toEqual([0, 0.3, 0.6, 1]);
+    expect([...vals].sort((a, b) => a - b)).toEqual([0, 0.3, 0.6, 1]);
   });
 
   it('popup rises in discrete jumps, then disappears', () => {

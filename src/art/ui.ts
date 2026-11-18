@@ -21,7 +21,8 @@ export const STAMP_TEXT: Record<StampId, string> = {
 };
 const STAMP_FONT = 30;
 const STAMP_PAD_X = 14;
-const STAMP_H = 54;
+/** Stamp texture height (logical px, before display scale). */
+export const STAMP_H = 54;
 
 /** Stamp texture size; needs a ctx only to measure the Anton text. */
 export function stampSize(ctx: Ctx, id: StampId): { w: number; h: number } {
